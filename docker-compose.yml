@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: hydra
+      POSTGRES_USER: hydra
+      POSTGRES_PASSWORD: hydra
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - hydra-network
+
+  hydra:
+    image: nixos/nix:latest
+    command: |
+      sh -c "
+        # Install Hydra
+        nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs
+        nix-channel --update
+        nix-env -iA nixpkgs.hydra nixpkgs.postgresql
+        
+        # Wait for PostgreSQL
+        while ! pg_isready -h postgres -U hydra; do
+          echo 'Waiting for PostgreSQL...'
+          sleep 2
+        done
+        
+        # Initialize database
+        export HYDRA_DBI='dbi:Pg:dbname=hydra;host=postgres;user=hydra'
+        hydra-init
+        
+        # Create admin user
+        hydra-create-user admin --full-name 'Admin' --email-address 'admin@localhost' --password 'admin' --role admin || true
+        
+        # Start Hydra
+        hydra-server --port 3000 --host 0.0.0.0
+      "
+    environment:
+      HYDRA_DBI: "dbi:Pg:dbname=hydra;host=postgres;user=hydra"
+      HYDRA_CONFIG: /etc/hydra.conf
+      NIX_REMOTE: daemon
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+    networks:
+      - hydra-network
+    volumes:
+      - hydra_store:/nix/store
+      - hydra_var:/nix/var
+
+networks:
+  hydra-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  hydra_store:
+  hydra_var:
