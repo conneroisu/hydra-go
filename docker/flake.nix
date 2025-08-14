@@ -1,5 +1,5 @@
 {
-  description = "Hydra-in-Docker image (NixOS+systemd+Postgres) for tests";
+  description = "Hydra-in-Docker image for testing";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
@@ -12,98 +12,54 @@
   in
     builtins.listToAttrs (map (system: let
         pkgs = import nixpkgs {inherit system;};
-      in {
-        name = system;
-        value = {
-          packages = {
-            hydraDockerImage = pkgs.dockerTools.buildNixosImage {
-              name = "hydra-nixos";
-              tag = "test";
-              # NixOS config for the image:
-              config = {
-                lib,
-                pkgs,
-                ...
-              }: {
-                boot.isContainer = true;
-                boot.kernelParams = ["systemd.unified_cgroup_hierarchy=1"];
-                system.stateVersion = "24.05";
-
-                # nix-daemon inside container, sandbox off (Docker cannot do user namespaces well in CI)
-                nix.settings = {
-                  sandbox = false;
-                  substituters = ["https://cache.nixos.org"];
-                  trusted-users = ["root" "hydra"];
-                  experimental-features = ["nix-command" "flakes"];
-                };
-                services.nix-daemon.enable = true;
-
-                # Postgres + Hydra
-                services.postgresql = {
-                  enable = true;
-                  # Tiny DB for tests
-                  settings.shared_buffers = "64MB";
-                  identMap = ''
-                    hydra-users root hydra
-                  '';
-                  authentication = lib.mkForce ''
-                    local   all             all                                     trust
-                    host    all             all             127.0.0.1/32            trust
-                    host    all             all             ::1/128                 trust
-                  '';
-                  initialScript = ''
-                    CREATE USER hydra WITH SUPERUSER;
-                    CREATE DATABASE hydra WITH OWNER hydra;
-                  '';
-                };
-
-                services.hydra = {
-                  enable = true;
-                  hydraURL = "http://localhost:3000/"; # used in links/emails only
-                  listenHost = "0.0.0.0";
-                  port = 3000;
-                  # Point Hydra at the local DB
-                  secretKeyFile = "/var/lib/hydra/secret-key"; # auto-created
-                  extraConfig = ''
-                    using_frontend_proxy = 1
-                    <database>
-                      type = "Pg"
-                      dbname = "hydra"
-                      user = "hydra" 
-                      host = "127.0.0.1"
-                      port = "5432"
-                    </database>
-                  '';
-                };
-
-                services.hydra-evaluator.enable = true;
-                services.hydra-queue-runner.enable = true;
-
-                # Open the web/UI port and health check port for testcontainers
-                networking.firewall.allowedTCPPorts = [3000 8080];
-                
-                # Add packages needed for health check and admin setup
-                environment.systemPackages = with pkgs; [
-                  curl
-                  python3
-                ];
-
-                # Health check endpoint for testcontainers
-                systemd.services.hydra-health-check = {
-                  after = ["hydra-server.service"];
-                  wants = ["hydra-server.service"];
-                  wantedBy = ["multi-user.target"];
-                  serviceConfig = {
-                    Type = "simple";
-                    User = "hydra";
-                    Restart = "always";
-                    RestartSec = "10";
-                  };
-                  script = ''
-                    ${pkgs.python3}/bin/python3 -c '
+        
+        # Create a startup script
+        startupScript = pkgs.writeScript "hydra-startup.sh" ''
+          #!/bin/bash
+          set -euo pipefail
+          
+          # Initialize PostgreSQL data directory if it doesn't exist
+          if [ ! -d /var/lib/postgresql/data/base ]; then
+            mkdir -p /var/lib/postgresql/data
+            chown postgres:postgres /var/lib/postgresql/data
+            chmod 700 /var/lib/postgresql/data
+            su - postgres -c "${pkgs.postgresql}/bin/initdb -D /var/lib/postgresql/data"
+          fi
+          
+          # Start PostgreSQL
+          su - postgres -c "${pkgs.postgresql}/bin/postgres -D /var/lib/postgresql/data -k /tmp" &
+          POSTGRES_PID=$!
+          
+          # Wait for PostgreSQL to start
+          for i in {1..30}; do
+            if su - postgres -c "${pkgs.postgresql}/bin/pg_isready -h localhost" >/dev/null 2>&1; then
+              echo "PostgreSQL is ready"
+              break
+            fi
+            sleep 1
+          done
+          
+          # Create Hydra database and user
+          su - postgres -c "${pkgs.postgresql}/bin/createuser -s hydra" 2>/dev/null || true
+          su - postgres -c "${pkgs.postgresql}/bin/createdb -O hydra hydra" 2>/dev/null || true
+          
+          # Initialize Hydra database
+          export HYDRA_DBI="dbi:Pg:dbname=hydra;host=localhost;user=hydra"
+          mkdir -p /var/lib/hydra
+          if [ ! -f /var/lib/hydra/.initialized ]; then
+            ${pkgs.hydra}/bin/hydra-init
+            touch /var/lib/hydra/.initialized
+          fi
+          
+          # Create admin user
+          ${pkgs.hydra}/bin/hydra-create-user admin --full-name "Admin" --email admin@example.com --password admin --role admin 2>/dev/null || true
+          
+          # Start health check server in background
+          ${pkgs.python3}/bin/python3 -c '
 import http.server
 import socketserver
 import json
+import threading
 from urllib.request import urlopen
 
 class HealthHandler(http.server.BaseHTTPRequestHandler):
@@ -127,36 +83,110 @@ class HealthHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
-with socketserver.TCPServer(("", 8080), HealthHandler) as httpd:
-    httpd.serve_forever()
-'
-                  '';
-                };
+def run_health_server():
+    with socketserver.TCPServer(("", 8080), HealthHandler) as httpd:
+        httpd.serve_forever()
 
-                # Create a deterministic admin token at build-time for tests
-                # (you can also Exec to create one at runtime if you prefer)
-                systemd.services.hydra-seed-admin = {
-                  after = ["hydra-server.service"];
-                  wants = ["hydra-server.service"];
-                  wantedBy = ["multi-user.target"];
-                  serviceConfig.Type = "oneshot";
-                  script = ''
-                    set -euo pipefail
-                    # Wait for Hydra to be available
-                    for i in {1..30}; do
-                      if curl -f http://localhost:3000/ >/dev/null 2>&1; then
-                        break
-                      fi
-                      sleep 2
-                    done
-                    
-                    # If not already created, make an admin user and a shared token
-                    if ! su - hydra -c 'hydra-create-user admin --full-name "Admin" --email admin@example.com --password admin --role admin' >/dev/null 2>&1; then
-                      true
-                    fi
-                    echo "admin user seeded successfully"
-                  '';
+threading.Thread(target=run_health_server, daemon=True).start()
+' &
+          
+          # Start Hydra server
+          exec ${pkgs.hydra}/bin/hydra-server --host 0.0.0.0 --port 3000
+        '';
+        
+        # Health check script
+        healthCheckScript = pkgs.writeScript "health-check.py" ''
+          #!${pkgs.python3}/bin/python3
+          import http.server
+          import socketserver
+          import json
+          from urllib.request import urlopen
+
+          class HealthHandler(http.server.BaseHTTPRequestHandler):
+              def do_GET(self):
+                  if self.path == "/health":
+                      try:
+                          response = urlopen("http://localhost:3000/", timeout=5)
+                          if response.status == 200:
+                              self.send_response(200)
+                              self.send_header("Content-type", "application/json")
+                              self.end_headers()
+                              self.wfile.write(json.dumps({"status": "healthy", "hydra": "running"}).encode())
+                          else:
+                              raise Exception("Hydra not responding")
+                      except Exception as e:
+                          self.send_response(503)
+                          self.send_header("Content-type", "application/json")
+                          self.end_headers()
+                          self.wfile.write(json.dumps({"status": "unhealthy", "error": str(e)}).encode())
+                  else:
+                      self.send_response(404)
+                      self.end_headers()
+
+          with socketserver.TCPServer(("", 8080), HealthHandler) as httpd:
+              httpd.serve_forever()
+        '';
+      in {
+        name = system;
+        value = {
+          packages = {
+            hydraDockerImage = pkgs.dockerTools.buildImage {
+              name = "ghcr.io/conneroisu/hydra-go/hydra-test";
+              tag = "latest";
+              
+              copyToRoot = pkgs.buildEnv {
+                name = "image-root";
+                paths = with pkgs; [ 
+                  hydra
+                  postgresql
+                  python3
+                  curl
+                  bash
+                  coreutils
+                  glibc
+                  startupScript
+                  healthCheckScript
+                ];
+                pathsToLink = [ "/bin" ];
+              };
+              
+              runAsRoot = ''
+                #!${pkgs.runtimeShell}
+                ${pkgs.dockerTools.shadowSetup}
+                
+                # Create necessary directories
+                mkdir -p /var/lib/postgresql
+                mkdir -p /var/lib/hydra
+                mkdir -p /tmp
+                mkdir -p /etc/ssl/certs
+                
+                # Create postgres user
+                groupadd -r postgres --gid=999 || true
+                useradd -r -g postgres --uid=999 --home-dir=/var/lib/postgresql --shell=/bin/bash postgres || true
+                chown postgres:postgres /var/lib/postgresql
+                
+                # Create hydra user  
+                groupadd -r hydra --gid=998 || true
+                useradd -r -g hydra --uid=998 --home-dir=/var/lib/hydra --shell=/bin/bash hydra || true
+                chown hydra:hydra /var/lib/hydra
+                
+                # Set up SSL certificates
+                ${pkgs.cacert}/bin/update-ca-certificates
+              '';
+              
+              config = {
+                Cmd = [ "${startupScript}" ];
+                ExposedPorts = {
+                  "3000/tcp" = {};
+                  "8080/tcp" = {};
                 };
+                Env = [
+                  "PATH=/bin"
+                  "HYDRA_DBI=dbi:Pg:dbname=hydra;host=localhost;user=hydra"
+                  "PGDATA=/var/lib/postgresql/data"
+                ];
+                WorkingDir = "/";
+                User = "root";
               };
             };
           };
