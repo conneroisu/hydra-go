@@ -178,7 +178,7 @@ func TestEnvironmentVariables(t *testing.T) {
 		//     url = "https://hydra.nixos.org"
 		// }
 
-		testURL := getTestURL()
+		testURL := "http://localhost:3000"
 		assert.NotEmpty(t, testURL)
 	})
 

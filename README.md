@@ -275,88 +275,99 @@ type Build struct {
 }
 ```
 
-### Client Services
+### Flat API Interface
 
-The main client provides access to specialized services:
+The hydra-go SDK uses a flat architecture where all functionality is available directly through the main Client. There are no sub-services to import or manage - everything is accessible through a single unified interface.
 
-#### Projects Service
+#### Project Operations
 
 ```go
 // List all projects
-projects, err := client.Projects.List(ctx)
+projects, err := client.ListProjects(ctx)
 
 // Get specific project
-project, err := client.Projects.Get(ctx, "nixpkgs")
+project, err := client.GetProject(ctx, "nixpkgs")
 
 // Create project with options
-opts := projects.NewCreateOptions("name", "owner")
-response, err := client.Projects.CreateWithOptions(ctx, "name", opts)
+opts := hydra.NewCreateProjectOptions("name", "owner")
+response, err := client.CreateProjectWithOptions(ctx, "name", opts)
 
 // Update project
-response, err := client.Projects.Update(ctx, "name", updateOpts)
+response, err := client.UpdateProject(ctx, "name", updateRequest)
 
 // Delete project
-err := client.Projects.Delete(ctx, "name")
+err := client.DeleteProject(ctx, "name")
 ```
 
-#### Jobsets Service
+#### Jobset Operations
 
 ```go
 // List jobsets for a project
-jobsets, err := client.Jobsets.List(ctx, "nixpkgs")
+jobsets, err := client.ListJobsets(ctx, "nixpkgs")
 
 // Get specific jobset
-jobset, err := client.Jobsets.Get(ctx, "nixpkgs", "trunk")
+jobset, err := client.GetJobset(ctx, "nixpkgs", "trunk")
 
 // Get evaluations
-evaluations, err := client.Jobsets.GetEvaluations(ctx, "nixpkgs", "trunk")
+evaluations, err := client.GetJobsetEvaluations(ctx, "nixpkgs", "trunk")
 
 // Create jobset
-opts := jobsets.NewJobsetOptions("name", "project")
-response, err := client.Jobsets.CreateWithOptions(ctx, "project", "name", opts)
+opts := hydra.NewCreateJobsetOptions("name", "project")
+response, err := client.CreateJobsetWithOptions(ctx, "project", "name", opts)
 
 // Trigger evaluation
-response, err := client.Jobsets.TriggerSingle(ctx, "project", "jobset")
+response, err := client.TriggerJobset(ctx, "project", "jobset")
 ```
 
-#### Builds Service
+#### Build Operations
 
 ```go
 // Get specific build
-build, err := client.Builds.Get(ctx, 12345)
+build, err := client.GetBuild(ctx, 12345)
 
 // Get builds for evaluation
-builds, err := client.Builds.GetEvaluationBuilds(ctx, evalID)
+builds, err := client.GetEvaluationBuilds(ctx, evalID)
 
-// Get build log (if available)
-log, err := client.Builds.GetLog(ctx, buildID)
+// Get evaluation details
+eval, err := client.GetEvaluation(ctx, evalID)
+
+// Wait for build completion
+build, err := client.WaitForBuild(ctx, buildID, pollInterval)
 ```
 
-#### Search Service
+#### Search Operations
 
 ```go
 // Search across all resource types
-results, err := client.Search.Search(ctx, "query")
+results, err := client.Search(ctx, "query")
+
+// Search with advanced options
+opts := hydra.NewSearchOptions("query")
+results, err := client.SearchWithOptions(ctx, opts)
+
+// Search specific types
+builds, err := client.SearchBuilds(ctx, "query")
+projects, err := client.SearchProjects(ctx, "query")
 
 // Get formatted search summary
-summary := search.GetSearchSummary("query", results)
+summary := hydra.GetSearchSummary("query", results)
 fmt.Println(summary.Format())
 ```
 
-#### Auth Service
+#### Authentication
 
 ```go
 // Login
-user, err := client.Auth.Login(ctx, "username", "password")
+user, err := client.Login(ctx, "username", "password")
 
 // Check authentication
-authenticated := client.Auth.IsAuthenticated()
+authenticated := client.IsAuthenticated()
 
-// Get current user info
-user, err := client.Auth.GetCurrentUser(ctx)
+// Get current user
+username := client.GetCurrentUser()
 
 // Logout
-client.Auth.Logout()
+client.Logout()
 ```
 
 ### Error Handling
@@ -385,6 +396,7 @@ Complete examples are available in the [`examples/`](./examples/) directory:
 
 - [`examples/basic/main.go`](./examples/basic/main.go) - Basic usage without authentication
 - [`examples/authenticated/main.go`](./examples/authenticated/main.go) - Authenticated operations and project management
+- [`examples/complete/main.go`](./examples/complete/main.go) - Comprehensive demonstration of all API features
 
 Run examples:
 
@@ -397,6 +409,9 @@ HYDRA_USERNAME=user HYDRA_PASSWORD=pass go run examples/authenticated/main.go
 
 # Basic example with specific build ID
 go run examples/basic/main.go 12345
+
+# Complete example demonstrating all features
+go run examples/complete/main.go
 ```
 
 ## Testing
@@ -404,7 +419,13 @@ go run examples/basic/main.go 12345
 The project includes comprehensive tests:
 
 ```bash
-# Run all tests
+# Run all tests using Nix (recommended)
+nix develop -c tests
+
+# Run linting
+nix develop -c lint
+
+# Alternative: Run tests with standard Go tools
 go test ./...
 
 # Run tests with coverage
@@ -422,13 +443,14 @@ HYDRA_URL=https://my-hydra.example.com go test ./tests/
 
 ### Test Scripts
 
-The project provides several test scripts for different scenarios:
+The project provides test scripts in the `scripts/` directory:
 
-- `./run-tests.sh` - Run basic unit tests
-- `./test-simple.sh` - Quick smoke tests
-- `./test-with-docker.sh` - Tests with Docker-based Hydra instance
-- `./test-against-nixos-hydra.sh` - Tests against the public Hydra instance
-- `./verify-tests.sh` - Comprehensive test verification
+- `scripts/run-tests.sh` - Run basic unit tests
+- `scripts/test-against-nixos-hydra.sh` - Tests against the public Hydra instance
+
+Additionally, NixOS-specific test scripts are available in `nixos-tests/`:
+- `nixos-tests/run-vm-test.sh` - Run tests in NixOS VM
+- `nixos-tests/run-real-hydra-test.sh` - Test against real Hydra instances
 
 ## Development
 
@@ -436,27 +458,33 @@ The project provides several test scripts for different scenarios:
 
 ```
 hydra-go/
-├── hydra/                 # Main SDK package
-│   ├── auth/             # Authentication service
-│   ├── builds/           # Builds service  
-│   ├── client/           # HTTP client
-│   ├── jobsets/          # Jobsets service
-│   ├── models/           # Type definitions
-│   ├── projects/         # Projects service
-│   ├── search/           # Search service
-│   └── hydra.go          # Main client
-├── examples/             # Usage examples
-│   ├── basic/           # Basic usage
-│   └── authenticated/   # Authenticated operations
-├── tests/               # Test suite
-├── nixos-tests/         # NixOS-specific tests
+├── client.go            # Main client implementation
+├── types.go             # Type re-exports for flat API
+├── hydra/               # Internal packages
+│   ├── auth/           # Authentication service
+│   ├── builds/         # Builds service  
+│   ├── client/         # HTTP client
+│   ├── jobsets/        # Jobsets service
+│   ├── models/         # Type definitions
+│   ├── projects/       # Projects service
+│   └── search/         # Search service
+├── examples/           # Usage examples
+│   ├── basic/         # Basic usage
+│   ├── authenticated/ # Authenticated operations
+│   └── complete/      # Comprehensive API demo
+├── tests/             # Test suite
+├── nixos-tests/       # NixOS-specific tests
+├── scripts/           # Build and test scripts
 └── README.md
 ```
 
 ### Building
 
 ```bash
-# Build the project
+# Build using Nix (recommended)
+nix develop -c go build ./...
+
+# Alternative: Build with standard Go tools
 go build ./...
 
 # Build examples
