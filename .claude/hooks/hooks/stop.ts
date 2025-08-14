@@ -33,15 +33,6 @@ export class StopHook {
 
       const input = await InputReader.readStdinJson<StopHookInput>();
 
-      // Log parsed arguments and input for debugging
-      Logger.info('Stop hook initiated', {
-        chatMode: args.chat,
-        sessionId: input.session_id,
-        stopHookActive: input.stop_hook_active,
-        transcriptPath: input.transcript_path,
-        timestamp: input.timestamp,
-      });
-
       // Run linting and tests in parallel
       const [lintingSuccess, testsSuccess] = await Promise.all([
         this.runLinting(),
@@ -68,13 +59,6 @@ export class StopHook {
       }
 
       const successMessage = `Session ${input.session_id} completed successfully${args.chat ? ' (chat mode)' : ''}`;
-      Logger.info('Stop hook completed successfully', {
-        sessionId: input.session_id,
-        chatMode: args.chat,
-        lintingPassed: true,
-        testsPassed: true,
-        formattingPassed: true,
-      });
 
       return createHookResult(true, successMessage);
     } catch (error) {

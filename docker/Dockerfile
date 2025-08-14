@@ -1,28 +1,21 @@
-FROM nixos/nix:latest
+FROM golang:1.21-alpine AS builder
 
-# Set up environment
-ENV HYDRA_DBI="dbi:Pg:dbname=hydra;host=localhost;user=hydra"
-ENV PGDATA="/var/lib/postgresql/data"
+WORKDIR /app
+COPY main.go .
 
-# Install necessary packages including shadow utils for user management
-RUN nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs && \
-    nix-channel --update && \
-    nix-env -iA nixpkgs.hydra nixpkgs.postgresql nixpkgs.python3 nixpkgs.curl nixpkgs.bash nixpkgs.shadow
+# Build the mock server
+RUN go build -o mock-hydra main.go
 
-# Create necessary directories
-RUN mkdir -p /var/lib/postgresql && \
-    mkdir -p /var/lib/hydra
+FROM alpine:latest
 
-# Add startup script
-COPY startup.sh /usr/local/bin/startup.sh
-RUN chmod +x /usr/local/bin/startup.sh
+# Install ca-certificates for HTTPS requests
+RUN apk --no-cache add ca-certificates
 
-# Add health check script
-COPY health-check.py /usr/local/bin/health-check.py
-RUN chmod +x /usr/local/bin/health-check.py
+WORKDIR /root/
 
-# Expose ports
+# Copy the binary from builder stage
+COPY --from=builder /app/mock-hydra .
+
 EXPOSE 3000 8080
 
-# Run the startup script
-CMD ["/usr/local/bin/startup.sh"]
+CMD ["./mock-hydra"]

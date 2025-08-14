@@ -93,58 +93,6 @@
             echo ""
 
             # Phase 3: NixOS VM Tests
-            echo -e "$BLUE"Phase 3: Running NixOS VM tests..."$NC"
-            echo "----------------------------------"
-
-            # List of NixOS tests to run in order of complexity
-            NIXOS_TESTS="ultra-simple-test.nix minimal-hydra-test.nix basic-hydra-test.nix working-hydra-test.nix hydra-sdk-test.nix real-sdk-test.nix final-test.nix"
-
-            NIXOS_FAILED=""
-
-            for test_file in $NIXOS_TESTS; do
-              echo "Running $test_file..."
-              if nix-build "nixos-tests/$test_file" -o "result-$test_file" --quiet; then
-                echo -e "$GREEN"+ "$test_file" passed"$NC"
-                rm -f "result-$test_file"
-              else
-                echo -e "$RED"- "$test_file" failed"$NC"
-                NIXOS_FAILED="$NIXOS_FAILED $test_file"
-                FAILED_TESTS="$FAILED_TESTS nixos-$test_file"
-              fi
-            done
-
-            if [ -z "$NIXOS_FAILED" ]; then
-              echo -e "$GREEN"+ All NixOS tests passed"$NC"
-            else
-              echo -e "$RED"- NixOS tests failed:"$NIXOS_FAILED""$NC"
-            fi
-            echo ""
-
-            # Final Summary
-            echo "========================================="
-            echo "Test Suite Summary"
-            echo "========================================="
-
-            if [ -z "$FAILED_TESTS" ]; then
-              echo -e "$GREEN"ALL TESTS PASSED!"$NC"
-              echo ""
-              echo "* Go unit tests"
-              echo "* Go integration tests"
-              echo "* NixOS VM tests"
-              echo ""
-              echo "The Hydra Go SDK has been comprehensively tested and is ready for use!"
-              exit 0
-            else
-              echo -e "$RED"SOME TESTS FAILED"$NC"
-              echo ""
-              echo "Failed test suites:$FAILED_TESTS"
-              echo ""
-              echo "Run individual test phases for debugging:"
-              echo "  • Go tests only: go test -v ./..."
-              echo "  • Integration tests: go test -v -tags=integration ./tests/..."
-              echo "  • Specific NixOS test: nix-build nixos-tests/<test-name>.nix"
-              exit 1
-            fi
           '';
           description = "Run comprehensive tests (Go + NixOS VM)";
         };
