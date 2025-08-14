@@ -22,9 +22,6 @@ import (
 // Error represents an API error response.
 type Error = models.Error
 
-// LoginRequest represents the login request payload.
-type LoginRequest = models.LoginRequest
-
 // User represents the authenticated user information.
 type User = models.User
 

@@ -40,9 +40,11 @@ import (
 	"github.com/conneroisu/hydra-go/hydra/search"
 )
 
-// Client is the main Hydra API client that provides access to all Hydra operations.
-// It encapsulates HTTP communication, authentication state, and service-specific functionality
-// through a unified interface.
+// Client is the main Hydra API client that provides access to all Hydra
+// operations.
+//
+// It encapsulates HTTP communication, authentication state, and
+// service-specific functionality through a unified interface.
 type Client struct {
 	// Base client for HTTP operations
 	client *client.Client
@@ -56,7 +58,9 @@ type Client struct {
 }
 
 // Config represents client configuration options.
-// All fields are optional; sensible defaults will be applied for omitted values.
+//
+// All fields are optional; sensible defaults will be applied for omitted
+// values.
 type Config struct {
 	BaseURL    string
 	HTTPClient *http.Client
