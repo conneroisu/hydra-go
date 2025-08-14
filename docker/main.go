@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -51,21 +50,18 @@ func main() {
 	// Main API server
 	mux := http.NewServeMux()
 
-	// Projects endpoints
-	mux.HandleFunc("/api/projects", handleProjects)
-	mux.HandleFunc("/api/project/", handleProject)
+	// Projects endpoints (match real Hydra API paths)
+	mux.HandleFunc("/project/", handleProject)  // Individual project (must be before root)
+	mux.HandleFunc("/", handleProjects)  // List projects
 
-	// Search endpoint
-	mux.HandleFunc("/api/search", handleSearch)
+	// Search endpoint 
+	mux.HandleFunc("/search", handleSearch)
 
 	// Build endpoint
-	mux.HandleFunc("/api/build/", handleBuild)
+	mux.HandleFunc("/build/", handleBuild)
 
 	// Login endpoint
 	mux.HandleFunc("/login", handleLogin)
-
-	// Root endpoint
-	mux.HandleFunc("/", handleRoot)
 
 	log.Println("Hydra API server starting on :3000")
 	log.Fatal(http.ListenAndServe(":3000", mux))
@@ -94,7 +90,7 @@ func handleProjects(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleProject(w http.ResponseWriter, r *http.Request) {
-	projectName := strings.TrimPrefix(r.URL.Path, "/api/project/")
+	projectName := strings.TrimPrefix(r.URL.Path, "/project/")
 
 	switch projectName {
 	case "nixpkgs":
@@ -128,7 +124,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleBuild(w http.ResponseWriter, r *http.Request) {
-	buildID := strings.TrimPrefix(r.URL.Path, "/api/build/")
+	buildID := strings.TrimPrefix(r.URL.Path, "/build/")
 
 	if buildID == "1" {
 		build := Build{
@@ -172,13 +168,3 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleRoot(w http.ResponseWriter, r *http.Request) {
-	if strings.HasPrefix(r.URL.Path, "/api") {
-		http.NotFound(w, r)
-
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/html")
-	fmt.Fprintf(w, `<html><body><h1>Mock Hydra Server</h1><p>API available at /api/</p></body></html>`)
-}
