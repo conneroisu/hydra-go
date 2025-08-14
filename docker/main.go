@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type Project struct {
@@ -39,22 +40,32 @@ type LoginRequest struct {
 func main() {
 	// Health check server
 	go func() {
-		http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("OK"))
 		})
+		
+		server := &http.Server{
+			Addr:         ":8080",
+			Handler:      mux,
+			ReadTimeout:  10 * time.Second,
+			WriteTimeout: 10 * time.Second,
+			IdleTimeout:  30 * time.Second,
+		}
+		
 		log.Println("Health check server starting on :8080")
-		log.Fatal(http.ListenAndServe(":8080", nil))
+		log.Fatal(server.ListenAndServe())
 	}()
 
 	// Main API server
 	mux := http.NewServeMux()
 
 	// Projects endpoints (match real Hydra API paths)
-	mux.HandleFunc("/project/", handleProject)  // Individual project (must be before root)
-	mux.HandleFunc("/", handleProjects)  // List projects
+	mux.HandleFunc("/project/", handleProject) // Individual project (must be before root)
+	mux.HandleFunc("/", handleProjects)        // List projects
 
-	// Search endpoint 
+	// Search endpoint
 	mux.HandleFunc("/search", handleSearch)
 
 	// Build endpoint
@@ -63,8 +74,16 @@ func main() {
 	// Login endpoint
 	mux.HandleFunc("/login", handleLogin)
 
+	server := &http.Server{
+		Addr:         ":3000",
+		Handler:      mux,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  30 * time.Second,
+	}
+	
 	log.Println("Hydra API server starting on :3000")
-	log.Fatal(http.ListenAndServe(":3000", mux))
+	log.Fatal(server.ListenAndServe())
 }
 
 func handleProjects(w http.ResponseWriter, r *http.Request) {
@@ -147,12 +166,14 @@ func handleBuild(w http.ResponseWriter, r *http.Request) {
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+
 		return
 	}
 
 	var loginReq LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&loginReq); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+
 		return
 	}
 
@@ -167,4 +188,3 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 	}
 }
-
