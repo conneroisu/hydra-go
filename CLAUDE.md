@@ -20,7 +20,7 @@
 - `/examples` - Example code
 
 ### Build Commands
-- `nix develop -c tests` - Run tests
+- `nix develop -c tests` - Run all tests
 - `nix develop -c lint` - Linting
 
 Do what has been asked; nothing more, nothing less.
