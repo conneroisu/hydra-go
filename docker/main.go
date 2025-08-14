@@ -104,7 +104,7 @@ func main() {
 	// Jobset endpoints
 	mux.HandleFunc("/jobset/", handleJobset)   // Individual jobset
 	mux.HandleFunc("/jobsets/", handleJobsets) // List jobsets for project
-	mux.HandleFunc("/api/jobsets", handleApiJobsets) // API endpoint for jobsets list
+	mux.HandleFunc("/api/jobsets", handleAPIJobsets) // API endpoint for jobsets list
 
 	// Evaluation endpoints
 	mux.HandleFunc("/eval/", handleEvaluations)
@@ -434,7 +434,7 @@ func handleEvaluations(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(evaluations)
 }
 
-func handleApiJobsets(w http.ResponseWriter, r *http.Request) {
+func handleAPIJobsets(w http.ResponseWriter, r *http.Request) {
 	// Extract project from query parameter: /api/jobsets?project=nixpkgs
 	project := r.URL.Query().Get("project")
 	
