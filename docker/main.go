@@ -97,6 +97,7 @@ func main() {
 	// Jobset endpoints
 	mux.HandleFunc("/jobset/", handleJobset)   // Individual jobset
 	mux.HandleFunc("/jobsets/", handleJobsets) // List jobsets for project
+	mux.HandleFunc("/api/jobsets", handleApiJobsets) // API endpoint for jobsets list
 
 	// Evaluation endpoints
 	mux.HandleFunc("/eval/", handleEvaluations)
@@ -388,6 +389,36 @@ func handleEvaluations(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(evaluations)
+}
+
+func handleApiJobsets(w http.ResponseWriter, r *http.Request) {
+	// Extract project from query parameter: /api/jobsets?project=nixpkgs
+	project := r.URL.Query().Get("project")
+	
+	if project == nixpkgsProject {
+		// Return JobsetOverview format (array of JobsetOverviewItem)
+		jobsets := []map[string]interface{}{
+			{
+				"name":             "trunk",
+				"project":          nixpkgsProject,
+				"nrtotal":          0,
+				"checkinterval":    300,
+				"haserrormsg":      false,
+				"nrscheduled":      0,
+				"nrfailed":         0,
+				"errortime":        0,
+				"fetcherrormsg":    nil,
+				"starttime":        nil,
+				"lastcheckedtime":  1692000000,
+				"triggertime":      nil,
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(jobsets)
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]map[string]interface{}{})
+	}
 }
 
 func handlePush(w http.ResponseWriter, r *http.Request) {
