@@ -61,6 +61,7 @@
                   enable = true;
                   hydraURL = "http://localhost:3000/"; # used in links/emails only
                   listenHost = "0.0.0.0";
+                  port = 3000;
                   # Point Hydra at the local DB
                   secretKeyFile = "/var/lib/hydra/secret-key"; # auto-created
                   extraConfig = ''
@@ -68,7 +69,7 @@
                     <database>
                       type = "Pg"
                       dbname = "hydra"
-                      user = "hydra"
+                      user = "hydra" 
                       host = "127.0.0.1"
                       port = "5432"
                     </database>
@@ -78,8 +79,59 @@
                 services.hydra-evaluator.enable = true;
                 services.hydra-queue-runner.enable = true;
 
-                # Open the web/UI port for testcontainers
-                networking.firewall.allowedTCPPorts = [3000];
+                # Open the web/UI port and health check port for testcontainers
+                networking.firewall.allowedTCPPorts = [3000 8080];
+                
+                # Add packages needed for health check and admin setup
+                environment.systemPackages = with pkgs; [
+                  curl
+                  python3
+                ];
+
+                # Health check endpoint for testcontainers
+                systemd.services.hydra-health-check = {
+                  after = ["hydra-server.service"];
+                  wants = ["hydra-server.service"];
+                  wantedBy = ["multi-user.target"];
+                  serviceConfig = {
+                    Type = "simple";
+                    User = "hydra";
+                    Restart = "always";
+                    RestartSec = "10";
+                  };
+                  script = ''
+                    ${pkgs.python3}/bin/python3 -c '
+import http.server
+import socketserver
+import json
+from urllib.request import urlopen
+
+class HealthHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/health":
+            try:
+                response = urlopen("http://localhost:3000/", timeout=5)
+                if response.status == 200:
+                    self.send_response(200)
+                    self.send_header("Content-type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "healthy", "hydra": "running"}).encode())
+                else:
+                    raise Exception("Hydra not responding")
+            except Exception as e:
+                self.send_response(503)
+                self.send_header("Content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "unhealthy", "error": str(e)}).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+with socketserver.TCPServer(("", 8080), HealthHandler) as httpd:
+    httpd.serve_forever()
+'
+                  '';
+                };
 
                 # Create a deterministic admin token at build-time for tests
                 # (you can also Exec to create one at runtime if you prefer)
@@ -90,11 +142,19 @@
                   serviceConfig.Type = "oneshot";
                   script = ''
                     set -euo pipefail
+                    # Wait for Hydra to be available
+                    for i in {1..30}; do
+                      if curl -f http://localhost:3000/ >/dev/null 2>&1; then
+                        break
+                      fi
+                      sleep 2
+                    done
+                    
                     # If not already created, make an admin user and a shared token
                     if ! su - hydra -c 'hydra-create-user admin --full-name "Admin" --email admin@example.com --password admin --role admin' >/dev/null 2>&1; then
                       true
                     fi
-                    echo "seeded"
+                    echo "admin user seeded successfully"
                   '';
                 };
               };
