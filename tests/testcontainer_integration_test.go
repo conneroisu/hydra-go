@@ -42,6 +42,7 @@ func StartHydraContainer(ctx context.Context, t *testing.T) *HydraContainer {
 	req := testcontainers.ContainerRequest{
 		Image:        image,
 		ExposedPorts: []string{hydraPort, healthPort},
+		ImagePlatform: "linux/amd64", // Force platform for consistency
 		WaitingFor: wait.ForAll(
 			// Wait for health check endpoint to return 200
 			wait.ForHTTP("/health").WithPort(healthPort).WithStatusCodeMatcher(func(status int) bool {
