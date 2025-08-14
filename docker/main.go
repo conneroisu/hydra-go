@@ -25,6 +25,31 @@ type Build struct {
 	StartTime   int64  `json:"starttime"`
 	StopTime    int64  `json:"stoptime"`
 	BuildStatus int    `json:"buildstatus"`
+	NixName     string `json:"nixname"`
+	Finished    bool   `json:"-"`
+}
+
+type Jobset struct {
+	Name        string `json:"name"`
+	Project     string `json:"project"`
+	Description string `json:"description"`
+	Enabled     bool   `json:"enabled"`
+	Hidden      bool   `json:"hidden"`
+}
+
+type SearchResult struct {
+	Jobsets   []Jobset `json:"jobsets"`
+	Projects  []Project `json:"projects"`
+	Builds    []Build   `json:"builds"`
+	BuildsDrv []Build   `json:"buildsdrv"`
+}
+
+type PushResponse struct {
+	JobsetsTriggered []string `json:"jobsetsTriggered"`
+}
+
+type Evaluations struct {
+	Evals []map[string]interface{} `json:"evals"`
 }
 
 type User struct {
@@ -64,6 +89,16 @@ func main() {
 	// Projects endpoints (match real Hydra API paths)
 	mux.HandleFunc("/project/", handleProject) // Individual project (must be before root)
 	mux.HandleFunc("/", handleProjects)        // List projects
+
+	// Jobset endpoints
+	mux.HandleFunc("/jobset/", handleJobset)   // Individual jobset
+	mux.HandleFunc("/jobsets/", handleJobsets) // List jobsets for project
+	
+	// Evaluation endpoints
+	mux.HandleFunc("/eval/", handleEvaluations)
+	
+	// Trigger endpoint
+	mux.HandleFunc("/push", handlePush)
 
 	// Search endpoint
 	mux.HandleFunc("/search", handleSearch)
@@ -138,14 +173,51 @@ func handleProject(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleSearch(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("query")
+	
+	result := SearchResult{
+		Jobsets:   []Jobset{},
+		Projects:  []Project{},
+		Builds:    []Build{},
+		BuildsDrv: []Build{},
+	}
+	
+	// Mock search results based on query
+	if query == "hello" || query == "" {
+		result.Builds = append(result.Builds, Build{
+			ID:          1,
+			Project:     "nixpkgs",
+			Jobset:      "trunk", 
+			Job:         "hello",
+			Timestamp:   1692000000,
+			StartTime:   1692000000,
+			StopTime:    1692000000,
+			BuildStatus: 0,
+			NixName:     "hello-2.12.1",
+			Finished:    true,
+		})
+	}
+	
+	if query == "nix" || query == "" {
+		result.Projects = append(result.Projects, Project{
+			Name:        "nixpkgs",
+			DisplayName: "Nixpkgs",
+			Description: "Nix packages collection",
+			Enabled:     true,
+			Hidden:      false,
+		})
+	}
+	
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte("[]"))
+	_ = json.NewEncoder(w).Encode(result)
 }
 
 func handleBuild(w http.ResponseWriter, r *http.Request) {
 	buildID := strings.TrimPrefix(r.URL.Path, "/build/")
 
-	if buildID == "1" {
+	// Support multiple build IDs
+	switch buildID {
+	case "1":
 		build := Build{
 			ID:          1,
 			Project:     "nixpkgs",
@@ -155,10 +227,27 @@ func handleBuild(w http.ResponseWriter, r *http.Request) {
 			StartTime:   1692000000,
 			StopTime:    1692000000,
 			BuildStatus: 0,
+			NixName:     "hello-2.12.1",
+			Finished:    true,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(build)
-	} else {
+	case "123456":
+		build := Build{
+			ID:          123456,
+			Project:     "nixpkgs",
+			Jobset:      "trunk",
+			Job:         "firefox",
+			Timestamp:   1692000000,
+			StartTime:   1692000000,
+			StopTime:    1692000000,
+			BuildStatus: 0,
+			NixName:     "firefox-118.0",
+			Finished:    true,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(build)
+	default:
 		http.NotFound(w, r)
 	}
 }
@@ -178,6 +267,16 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if loginReq.Username == "admin" && loginReq.Password == "admin" {
+		// Set session cookie like real Hydra would
+		http.SetCookie(w, &http.Cookie{
+			Name:     "hydra-session",
+			Value:    "mock-session-token-12345",
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   false, // Set to false for local testing
+			MaxAge:   3600,  // 1 hour
+		})
+		
 		user := User{
 			Username: "admin",
 			FullName: "Admin",
@@ -187,4 +286,83 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	} else {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 	}
+}
+
+func handleJobsets(w http.ResponseWriter, r *http.Request) {
+	// Extract project name from /jobsets/PROJECT
+	path := strings.TrimPrefix(r.URL.Path, "/jobsets/")
+	project := strings.Split(path, "/")[0]
+	
+	if project == "nixpkgs" {
+		jobsets := []Jobset{
+			{
+				Name:        "trunk",
+				Project:     "nixpkgs",
+				Description: "Main development branch",
+				Enabled:     true,
+				Hidden:      false,
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(jobsets)
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]Jobset{})
+	}
+}
+
+func handleJobset(w http.ResponseWriter, r *http.Request) {
+	// Extract project and jobset from /jobset/PROJECT/JOBSET
+	path := strings.TrimPrefix(r.URL.Path, "/jobset/")
+	parts := strings.Split(path, "/")
+	
+	if len(parts) >= 2 {
+		project := parts[0]
+		jobsetName := parts[1]
+		
+		if project == "nixpkgs" && jobsetName == "trunk" {
+			jobset := Jobset{
+				Name:        "trunk",
+				Project:     "nixpkgs",
+				Description: "Main development branch",
+				Enabled:     true,
+				Hidden:      false,
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(jobset)
+			return
+		}
+	}
+	
+	http.NotFound(w, r)
+}
+
+func handleEvaluations(w http.ResponseWriter, r *http.Request) {
+	// Mock evaluations response
+	evaluations := Evaluations{
+		Evals: []map[string]interface{}{
+			{
+				"id":        1,
+				"project":   "nixpkgs",
+				"jobset":    "trunk",
+				"timestamp": 1692000000,
+			},
+		},
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(evaluations)
+}
+
+func handlePush(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	
+	// Mock push response
+	response := PushResponse{
+		JobsetsTriggered: []string{"nixpkgs:trunk"},
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(response)
 }
