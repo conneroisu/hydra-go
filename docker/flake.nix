@@ -144,8 +144,13 @@ threading.Thread(target=run_health_server, daemon=True).start()
                   bash
                   coreutils
                   glibc
-                  startupScript
-                  healthCheckScript
+                  (pkgs.runCommand "scripts" {} ''
+                    mkdir -p $out/bin
+                    cp ${startupScript} $out/bin/hydra-startup.sh
+                    cp ${healthCheckScript} $out/bin/health-check.py
+                    chmod +x $out/bin/hydra-startup.sh
+                    chmod +x $out/bin/health-check.py
+                  '')
                 ];
                 pathsToLink = [ "/bin" ];
               };
@@ -175,7 +180,7 @@ threading.Thread(target=run_health_server, daemon=True).start()
               '';
               
               config = {
-                Cmd = [ "${startupScript}" ];
+                Cmd = [ "/bin/hydra-startup.sh" ];
                 ExposedPorts = {
                   "3000/tcp" = {};
                   "8080/tcp" = {};

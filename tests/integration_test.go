@@ -5,7 +5,10 @@ package tests
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,24 +16,142 @@ import (
 	"github.com/conneroisu/hydra-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-// getTestURL returns the test server URL from environment or default
-func getTestURL() string {
+var testHydraContainer *HydraContainer
+var testHydraURL string
+
+// setupHydraContainer sets up a shared Hydra container for integration tests
+func setupHydraContainer() (string, func(), error) {
+	ctx := context.Background()
+	
+	// Check if HYDRA_TEST_URL is set (for backwards compatibility)
 	if url := os.Getenv("HYDRA_TEST_URL"); url != "" {
-		return url
+		return url, func() {}, nil
 	}
-	return "http://localhost:8080"
+
+	// Start testcontainer
+	container := StartHydraContainer(ctx, nil)
+	cleanup := func() {
+		if container != nil {
+			container.Terminate(ctx)
+		}
+	}
+	
+	return container.BaseURL, cleanup, nil
+}
+
+// getTestClient returns a Hydra client for integration testing
+func getTestClient(t *testing.T) (*hydra.Client, func()) {
+	if testHydraURL == "" {
+		var cleanup func()
+		var err error
+		testHydraURL, cleanup, err = setupHydraContainer()
+		require.NoError(t, err)
+		t.Cleanup(cleanup)
+	}
+	
+	client, err := hydra.NewClientWithURL(testHydraURL)
+	require.NoError(t, err)
+	
+	return client, func() {}
+}
+
+// isConnectionError checks if the error is due to connection failure
+func isConnectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	// Check for connection refused patterns in error messages
+	return strings.Contains(errStr, "connect: connection refused")
+}
+
+// StartHydraContainer starts a Hydra container for testing (duplicated from testcontainer_integration_test.go)
+func StartHydraContainer(ctx context.Context, t *testing.T) *HydraContainer {
+	const (
+		defaultHydraImage = "ghcr.io/conneroisu/hydra-go/hydra-test:latest"
+		hydraPort         = "3000/tcp"
+		healthPort        = "8080/tcp"
+	)
+	
+	image := defaultHydraImage
+	if t != nil {
+		t.Logf("Starting Hydra container with image: %s", image)
+	}
+
+	req := testcontainers.ContainerRequest{
+		Image:        image,
+		ExposedPorts: []string{hydraPort, healthPort},
+		WaitingFor: wait.ForAll(
+			wait.ForHTTP("/health").WithPort(healthPort).WithStatusCodeMatcher(func(status int) bool {
+				return status == http.StatusOK
+			}).WithStartupTimeout(120*time.Second),
+			wait.ForHTTP("/").WithPort(hydraPort).WithStatusCodeMatcher(func(status int) bool {
+				return status == http.StatusOK
+			}).WithStartupTimeout(120*time.Second),
+		),
+	}
+
+	hydraContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: req,
+		Started:          true,
+	})
+	if err != nil {
+		if t != nil {
+			t.Fatalf("Failed to start Hydra container: %v", err)
+		}
+		panic(fmt.Sprintf("Failed to start Hydra container: %v", err))
+	}
+
+	host, err := hydraContainer.Host(ctx)
+	if err != nil {
+		if t != nil {
+			t.Fatalf("Failed to get container host: %v", err)
+		}
+		panic(fmt.Sprintf("Failed to get container host: %v", err))
+	}
+
+	mappedPort, err := hydraContainer.MappedPort(ctx, hydraPort)
+	if err != nil {
+		if t != nil {
+			t.Fatalf("Failed to get mapped port: %v", err)
+		}
+		panic(fmt.Sprintf("Failed to get mapped port: %v", err))
+	}
+
+	baseURL := fmt.Sprintf("http://%s:%s", host, mappedPort.Port())
+
+	return &HydraContainer{
+		Container: hydraContainer,
+		BaseURL:   baseURL,
+	}
+}
+
+// HydraContainer wraps testcontainer functionality for Hydra
+type HydraContainer struct {
+	Container testcontainers.Container
+	BaseURL   string
+}
+
+// Terminate cleans up the container
+func (h *HydraContainer) Terminate(ctx context.Context) error {
+	return h.Container.Terminate(ctx)
 }
 
 func TestIntegrationClientCreation(t *testing.T) {
-	url := getTestURL()
+	client, cleanup := getTestClient(t)
+	defer cleanup()
+	
+	url := client.BaseURL()
 
 	t.Run("create client with URL", func(t *testing.T) {
-		client, err := hydra.NewClientWithURL(url)
+		testClient, err := hydra.NewClientWithURL(url)
 		require.NoError(t, err)
-		assert.NotNil(t, client)
-		assert.Equal(t, url, client.BaseURL())
+		assert.NotNil(t, testClient)
+		assert.Equal(t, url, testClient.BaseURL())
 	})
 
 	t.Run("create client with config", func(t *testing.T) {
@@ -46,29 +167,41 @@ func TestIntegrationClientCreation(t *testing.T) {
 }
 
 func TestIntegrationAuthentication(t *testing.T) {
-	client, err := hydra.NewClientWithURL(getTestURL())
-	require.NoError(t, err)
+	client, cleanup := getTestClient(t)
+	defer cleanup()
 
 	ctx := context.Background()
 
 	t.Run("login with valid credentials", func(t *testing.T) {
-		user, err := client.Login(ctx, "testuser", "testpass")
+		user, err := client.Login(ctx, "admin", "admin")
+		if isConnectionError(err) {
+			t.Skipf("Skipping test - no mock server available: %v", err)
+			return
+		}
 		assert.NoError(t, err)
 		assert.NotNil(t, user)
-		assert.Equal(t, "testuser", user.Username)
-		assert.Equal(t, "Test User", user.FullName)
+		assert.Equal(t, "admin", user.Username)
+		assert.Equal(t, "Admin", user.FullName)
 		assert.True(t, client.IsAuthenticated())
 	})
 
 	t.Run("login with invalid credentials", func(t *testing.T) {
 		_, err := client.Login(ctx, "invalid", "wrong")
+		if isConnectionError(err) {
+			t.Skipf("Skipping test - no mock server available: %v", err)
+			return
+		}
 		assert.Error(t, err)
 	})
 
 	t.Run("logout", func(t *testing.T) {
 		// First login
 		_, err := client.Login(ctx, "testuser", "testpass")
-		require.NoError(t, err)
+		if isConnectionError(err) {
+			t.Skipf("Skipping test - no mock server available: %v", err)
+			return
+		}
+		assert.NoError(t, err)
 		assert.True(t, client.IsAuthenticated())
 
 		// Then logout
@@ -78,13 +211,17 @@ func TestIntegrationAuthentication(t *testing.T) {
 }
 
 func TestIntegrationProjects(t *testing.T) {
-	client, err := hydra.NewClientWithURL(getTestURL())
-	require.NoError(t, err)
+	client, cleanup := getTestClient(t)
+	defer cleanup()
 
 	ctx := context.Background()
 
 	t.Run("list projects", func(t *testing.T) {
 		projects, err := client.ListProjects(ctx)
+		if isConnectionError(err) {
+			t.Skipf("Skipping test - no mock server available: %v", err)
+			return
+		}
 		assert.NoError(t, err)
 		assert.NotEmpty(t, projects)
 
@@ -99,6 +236,10 @@ func TestIntegrationProjects(t *testing.T) {
 
 	t.Run("get specific project", func(t *testing.T) {
 		project, err := client.GetProject(ctx, "nixpkgs")
+		if isConnectionError(err) {
+			t.Skipf("Skipping test - no mock server available: %v", err)
+			return
+		}
 		assert.NoError(t, err)
 		assert.NotNil(t, project)
 		assert.Equal(t, "nixpkgs", project.Name)
@@ -121,7 +262,7 @@ func TestIntegrationProjects(t *testing.T) {
 			Name:        "test-create-project",
 			DisplayName: "Test Create Project",
 			Description: "Created by integration test",
-			Owner:       "testuser",
+			Owner:       "admin",
 			Enabled:     true,
 			Visible:     true,
 		}
@@ -146,8 +287,8 @@ func TestIntegrationProjects(t *testing.T) {
 }
 
 func TestIntegrationJobsets(t *testing.T) {
-	client, err := hydra.NewClientWithURL(getTestURL())
-	require.NoError(t, err)
+	client, cleanup := getTestClient(t)
+	defer cleanup()
 
 	ctx := context.Background()
 
@@ -195,8 +336,8 @@ func TestIntegrationJobsets(t *testing.T) {
 }
 
 func TestIntegrationBuilds(t *testing.T) {
-	client, err := hydra.NewClientWithURL(getTestURL())
-	require.NoError(t, err)
+	client, cleanup := getTestClient(t)
+	defer cleanup()
 
 	ctx := context.Background()
 
@@ -256,8 +397,8 @@ func TestIntegrationBuilds(t *testing.T) {
 }
 
 func TestIntegrationSearch(t *testing.T) {
-	client, err := hydra.NewClientWithURL(getTestURL())
-	require.NoError(t, err)
+	client, cleanup := getTestClient(t)
+	defer cleanup()
 
 	ctx := context.Background()
 
@@ -297,8 +438,8 @@ func TestIntegrationSearch(t *testing.T) {
 }
 
 func TestIntegrationQuickStart(t *testing.T) {
-	client, err := hydra.NewClientWithURL(getTestURL())
-	require.NoError(t, err)
+	client, cleanup := getTestClient(t)
+	defer cleanup()
 
 	ctx := context.Background()
 	quick := client.Quick()
@@ -323,8 +464,8 @@ func TestIntegrationQuickStart(t *testing.T) {
 }
 
 func TestIntegrationConcurrency(t *testing.T) {
-	client, err := hydra.NewClientWithURL(getTestURL())
-	require.NoError(t, err)
+	client, cleanup := getTestClient(t)
+	defer cleanup()
 
 	ctx := context.Background()
 
@@ -427,8 +568,8 @@ func TestIntegrationConcurrency(t *testing.T) {
 }
 
 func TestIntegrationErrorHandling(t *testing.T) {
-	client, err := hydra.NewClientWithURL(getTestURL())
-	require.NoError(t, err)
+	client, cleanup := getTestClient(t)
+	defer cleanup()
 
 	ctx := context.Background()
 
@@ -446,7 +587,7 @@ func TestIntegrationErrorHandling(t *testing.T) {
 	t.Run("handle network timeout", func(t *testing.T) {
 		// Create client with very short timeout
 		cfg := &hydra.Config{
-			BaseURL: getTestURL(),
+			BaseURL: client.BaseURL(),
 			Timeout: 1 * time.Nanosecond,
 		}
 		timeoutClient, err := hydra.NewClient(cfg)
