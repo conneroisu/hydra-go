@@ -44,7 +44,7 @@ type Jobset struct {
 	Name        string `json:"name"`
 	Project     string `json:"project"`
 	Description string `json:"description"`
-	Enabled     bool   `json:"enabled"`
+	Enabled     int    `json:"enabled"` // 0=disabled, 1=enabled, 2=one-shot, 3=one-at-a-time
 	Hidden      bool   `json:"hidden"`
 }
 
@@ -111,6 +111,7 @@ func main() {
 
 	// Trigger endpoint
 	mux.HandleFunc("/push", handlePush)
+	mux.HandleFunc("/api/push", handlePush) // API endpoint for jobset triggering
 
 	// Search endpoint
 	mux.HandleFunc("/search", handleSearch)
@@ -378,7 +379,7 @@ func handleJobsets(w http.ResponseWriter, r *http.Request) {
 				Name:        "trunk",
 				Project:     nixpkgsProject,
 				Description: "Main development branch",
-				Enabled:     true,
+				Enabled:     1, // 1 = enabled
 				Hidden:      false,
 			},
 		}
@@ -404,7 +405,7 @@ func handleJobset(w http.ResponseWriter, r *http.Request) {
 				Name:        "trunk",
 				Project:     nixpkgsProject,
 				Description: "Main development branch",
-				Enabled:     true,
+				Enabled:     1, // 1 = enabled
 				Hidden:      false,
 			}
 			w.Header().Set("Content-Type", "application/json")
