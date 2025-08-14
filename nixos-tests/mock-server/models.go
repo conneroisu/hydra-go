@@ -71,10 +71,10 @@ type Build struct {
 }
 
 type JobsetEval struct {
-	ID           int    `json:"id"`
-	Timestamp    int64  `json:"timestamp"`
-	HasNewBuilds bool   `json:"hasnewbuilds"`
-	Builds       []int  `json:"builds"`
+	ID           int   `json:"id"`
+	Timestamp    int64 `json:"timestamp"`
+	HasNewBuilds bool  `json:"hasnewbuilds"`
+	Builds       []int `json:"builds"`
 }
 
 type Evaluations struct {

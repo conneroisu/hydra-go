@@ -1,3 +1,6 @@
+// Package main demonstrates basic usage of the hydra-go client library.
+// This example shows how to list projects, search, get project details,
+// and retrieve build information using the flat API architecture.
 package main
 
 import (
@@ -6,15 +9,15 @@ import (
 	"log"
 	"os"
 
-	"github.com/conneroisu/hydra-go/hydra"
-	"github.com/conneroisu/hydra-go/hydra/search"
+	"github.com/conneroisu/hydra-go"
 )
 
 func main() {
-	// Create a client for the public Hydra instance
+	// Create a client for the public Hydra instance.
+	// For custom instances, use hydra.NewClient(&hydra.Config{BaseURL: "https://hydra.example.com"})
 	client, err := hydra.NewDefaultClient()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to create Hydra client: %v", err)
 	}
 
 	ctx := context.Background()
@@ -37,11 +40,11 @@ func main() {
 
 	// Example 2: Search for nixpkgs
 	fmt.Println("\n=== Searching for 'nixpkgs' ===")
-	results, err := client.SearchAll(ctx, "nixpkgs")
+	results, err := client.Search(ctx, "nixpkgs")
 	if err != nil {
 		log.Printf("Error searching: %v", err)
 	} else {
-		summary := search.GetSearchSummary("nixpkgs", results)
+		summary := hydra.GetSearchSummary("nixpkgs", results)
 		fmt.Println(summary.Format())
 	}
 
@@ -62,7 +65,7 @@ func main() {
 	// Example 4: Get jobsets for a project
 	if project != nil && len(project.Jobsets) > 0 {
 		fmt.Printf("\n=== Getting Jobsets for '%s' ===\n", projectName)
-		jobsetOverview, err := client.Jobsets.List(ctx, projectName)
+		jobsetOverview, err := client.ListJobsets(ctx, projectName)
 		if err != nil {
 			log.Printf("Error getting jobsets: %v", err)
 		} else {

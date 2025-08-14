@@ -6,9 +6,14 @@
 
 **hydra-go** is an idiomatic Go SDK for the [Nix Hydra](https://nixos.org/hydra/) continuous integration and build system. This SDK provides a clean, type-safe interface to interact with Hydra's REST API, supporting both public and private Hydra instances.
 
+## 🚀 Flat Architecture Design
+
+hydra-go uses a **flat architecture** where all client functionality is imported from a single package `github.com/conneroisu/hydra-go`. This design follows Go best practices for library ergonomics, eliminating the need for multiple import statements and providing a clean, discoverable API surface.
+
 ## Features
 
 - ✨ **Full API Coverage**: Complete support for projects, jobsets, builds, evaluations, and search
+- 🏗️ **Flat Architecture**: Single import for all functionality - no sub-package imports needed
 - 🔐 **Authentication Support**: Login/logout with session management
 - 🚀 **Idiomatic Go**: Type-safe interfaces with proper error handling
 - 📦 **Zero Dependencies**: Uses only Go standard library plus testify for tests
@@ -27,7 +32,7 @@ import (
     "fmt"
     "log"
     
-    "github.com/conneroisu/hydra-go/hydra"
+    "github.com/conneroisu/hydra-go"
 )
 
 func main() {
@@ -50,7 +55,7 @@ func main() {
     }
     
     // Search for builds
-    results, err := client.SearchAll(ctx, "nixpkgs")
+    results, err := client.Search(ctx, "nixpkgs")
     if err != nil {
         log.Fatal(err)
     }
@@ -70,7 +75,7 @@ go get github.com/conneroisu/hydra-go
 Or import directly in your Go code:
 
 ```go
-import "github.com/conneroisu/hydra-go/hydra"
+import "github.com/conneroisu/hydra-go"
 ```
 
 ### Requirements
@@ -127,36 +132,36 @@ projects, err := client.ListProjects(ctx)
 project, err := client.GetProject(ctx, "nixpkgs")
 
 // Create a project (requires authentication)
-opts := projects.NewCreateOptions("my-project", "owner").
+opts := hydra.NewCreateProjectOptions("my-project", "owner").
     WithDisplayName("My Project").
     WithDescription("A test project").
     WithEnabled(true)
 
-resp, err := client.Projects.CreateWithOptions(ctx, "my-project", opts)
+resp, err := client.CreateProjectWithOptions(ctx, "my-project", opts)
 ```
 
 ### Working with Jobsets
 
 ```go
 // List jobsets for a project
-jobsets, err := client.Jobsets.List(ctx, "nixpkgs")
+jobsets, err := client.ListJobsets(ctx, "nixpkgs")
 
 // Get a specific jobset
 jobset, err := client.GetJobset(ctx, "nixpkgs", "trunk")
 
 // Get evaluations for a jobset
-evaluations, err := client.Jobsets.GetEvaluations(ctx, "nixpkgs", "trunk")
+evaluations, err := client.GetJobsetEvaluations(ctx, "nixpkgs", "trunk")
 
 // Create a jobset (requires authentication)
-opts := jobsets.NewJobsetOptions("test-jobset", "my-project").
+opts := hydra.NewCreateJobsetOptions("test-jobset", "my-project").
     WithDescription("Test jobset").
     WithNixExpression("nixpkgs", "release.nix").
     AddInput("nixpkgs", "git", "https://github.com/NixOS/nixpkgs.git", false)
 
-resp, err := client.Jobsets.CreateWithOptions(ctx, "my-project", "test-jobset", opts)
+resp, err := client.CreateJobsetWithOptions(ctx, "my-project", "test-jobset", opts)
 
 // Trigger evaluation
-pushResp, err := client.TriggerEvaluation(ctx, "my-project", "test-jobset")
+pushResp, err := client.TriggerJobset(ctx, "my-project", "test-jobset")
 ```
 
 ### Working with Builds
@@ -166,7 +171,7 @@ pushResp, err := client.TriggerEvaluation(ctx, "my-project", "test-jobset")
 build, err := client.GetBuild(ctx, 12345)
 
 // Get builds for an evaluation
-builds, err := client.Builds.GetEvaluationBuilds(ctx, evalID)
+builds, err := client.GetEvaluationBuilds(ctx, evalID)
 
 // Check build status
 if build.Finished {
@@ -179,14 +184,15 @@ if build.Finished {
 
 ```go
 // Search all resource types
-results, err := client.SearchAll(ctx, "hello")
+results, err := client.Search(ctx, "hello")
 
 // Get search summary
-summary := search.GetSearchSummary("hello", results)
+summary := hydra.GetSearchSummary("hello", results)
 fmt.Println(summary.Format())
 
-// Advanced search with the Search service
-results, err := client.Search.Search(ctx, "firefox")
+// Advanced search with options
+opts := hydra.NewSearchOptions("firefox")
+results, err := client.SearchWithOptions(ctx, opts)
 ```
 
 ### QuickStart Helper

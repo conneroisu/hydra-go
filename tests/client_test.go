@@ -6,8 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/conneroisu/hydra-go/hydra"
-	"github.com/conneroisu/hydra-go/hydra/models"
+	"github.com/conneroisu/hydra-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -50,11 +49,7 @@ func TestNewClient(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, client)
-				assert.NotNil(t, client.Auth)
-				assert.NotNil(t, client.Projects)
-				assert.NotNil(t, client.Jobsets)
-				assert.NotNil(t, client.Builds)
-				assert.NotNil(t, client.Search)
+				assert.NotEmpty(t, client.BaseURL())
 			}
 		})
 	}
@@ -104,7 +99,7 @@ func TestClientMethods(t *testing.T) {
 	})
 
 	t.Run("SearchAll", func(t *testing.T) {
-		results, err := client.SearchAll(ctx, "test")
+		results, err := client.Search(ctx, "test")
 		assert.NoError(t, err)
 		assert.NotNil(t, results)
 		assert.Empty(t, results.Projects)
@@ -159,7 +154,7 @@ func TestAuthentication(t *testing.T) {
 }
 
 func TestBuildHelpers(t *testing.T) {
-	build := &models.Build{
+	build := &hydra.Build{
 		ID:        123,
 		StartTime: 1000,
 		StopTime:  1300,
@@ -170,14 +165,14 @@ func TestBuildHelpers(t *testing.T) {
 
 	t.Run("BuildStatus", func(t *testing.T) {
 		// Test successful build
-		status := models.BuildStatusSuccess
+		status := hydra.BuildStatusSuccess
 		build.BuildStatus = &status
 		assert.True(t, build.IsSuccess())
 		assert.False(t, build.IsFailed())
 		assert.Equal(t, "succeeded", build.GetBuildStatusString())
 
 		// Test failed build
-		status = models.BuildStatusFailed
+		status = hydra.BuildStatusFailed
 		build.BuildStatus = &status
 		assert.False(t, build.IsSuccess())
 		assert.True(t, build.IsFailed())
@@ -202,7 +197,7 @@ func TestBuildHelpers(t *testing.T) {
 }
 
 func TestJobsetHelpers(t *testing.T) {
-	jobset := &models.Jobset{
+	jobset := &hydra.Jobset{
 		Name:    "test-jobset",
 		Project: "test-project",
 		Enabled: 1,
@@ -210,13 +205,13 @@ func TestJobsetHelpers(t *testing.T) {
 
 	t.Run("JobsetState", func(t *testing.T) {
 		assert.True(t, jobset.IsEnabled())
-		assert.Equal(t, models.JobsetStateEnabled, jobset.GetState())
+		assert.Equal(t, hydra.JobsetStateEnabled, jobset.GetState())
 
-		jobset.SetState(models.JobsetStateDisabled)
+		jobset.SetState(hydra.JobsetStateDisabled)
 		assert.False(t, jobset.IsEnabled())
 		assert.Equal(t, 0, jobset.Enabled)
 
-		jobset.SetState(models.JobsetStateOneShot)
+		jobset.SetState(hydra.JobsetStateOneShot)
 		assert.Equal(t, 2, jobset.Enabled)
 	})
 }

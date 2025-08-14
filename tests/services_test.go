@@ -6,10 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/conneroisu/hydra-go/hydra/builds"
-	"github.com/conneroisu/hydra-go/hydra/jobsets"
-	"github.com/conneroisu/hydra-go/hydra/models"
-	"github.com/conneroisu/hydra-go/hydra/projects"
+	"github.com/conneroisu/hydra-go"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,7 +26,7 @@ func TestBuildService(t *testing.T) {
 		}
 
 		for _, tt := range tests {
-			id, err := builds.ParseBuildID(tt.input)
+			id, err := hydra.ParseBuildID(tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -40,17 +37,17 @@ func TestBuildService(t *testing.T) {
 	})
 
 	t.Run("GetBuildURL", func(t *testing.T) {
-		url := builds.GetBuildURL("https://hydra.nixos.org", 123456)
+		url := hydra.GetBuildURL("https://hydra.nixos.org", 123456)
 		assert.Equal(t, "https://hydra.nixos.org/build/123456", url)
 	})
 
 	t.Run("GetEvaluationURL", func(t *testing.T) {
-		url := builds.GetEvaluationURL("https://hydra.nixos.org", 789)
+		url := hydra.GetEvaluationURL("https://hydra.nixos.org", 789)
 		assert.Equal(t, "https://hydra.nixos.org/eval/789", url)
 	})
 
 	t.Run("FilterBuilds", func(t *testing.T) {
-		testBuilds := []models.Build{
+		testBuilds := []hydra.Build{
 			{ID: 1, Project: "nixpkgs", Jobset: "trunk", Job: "hello", System: "x86_64-linux", Finished: true},
 			{ID: 2, Project: "nixpkgs", Jobset: "staging", Job: "git", System: "x86_64-linux", Finished: true},
 			{ID: 3, Project: "hydra", Jobset: "master", Job: "hydra", System: "aarch64-linux", Finished: false},
@@ -58,54 +55,54 @@ func TestBuildService(t *testing.T) {
 		}
 
 		// Filter by project
-		filter := &builds.BuildFilter{Project: "nixpkgs"}
-		filtered := builds.FilterBuilds(testBuilds, filter)
+		filter := &hydra.BuildFilter{Project: "nixpkgs"}
+		filtered := hydra.FilterBuilds(testBuilds, filter)
 		assert.Len(t, filtered, 3)
 
 		// Filter by jobset
-		filter = &builds.BuildFilter{Jobset: "trunk"}
-		filtered = builds.FilterBuilds(testBuilds, filter)
+		filter = &hydra.BuildFilter{Jobset: "trunk"}
+		filtered = hydra.FilterBuilds(testBuilds, filter)
 		assert.Len(t, filtered, 2)
 
 		// Filter by job
-		filter = &builds.BuildFilter{Job: "hello"}
-		filtered = builds.FilterBuilds(testBuilds, filter)
+		filter = &hydra.BuildFilter{Job: "hello"}
+		filtered = hydra.FilterBuilds(testBuilds, filter)
 		assert.Len(t, filtered, 2)
 
 		// Filter by system
-		filter = &builds.BuildFilter{System: "x86_64-linux"}
-		filtered = builds.FilterBuilds(testBuilds, filter)
+		filter = &hydra.BuildFilter{System: "x86_64-linux"}
+		filtered = hydra.FilterBuilds(testBuilds, filter)
 		assert.Len(t, filtered, 2)
 
 		// Filter by finished status
 		finished := true
-		filter = &builds.BuildFilter{Finished: &finished}
-		filtered = builds.FilterBuilds(testBuilds, filter)
+		filter = &hydra.BuildFilter{Finished: &finished}
+		filtered = hydra.FilterBuilds(testBuilds, filter)
 		assert.Len(t, filtered, 3)
 
 		// Filter with limit
-		filter = &builds.BuildFilter{Limit: 2}
-		filtered = builds.FilterBuilds(testBuilds, filter)
+		filter = &hydra.BuildFilter{Limit: 2}
+		filtered = hydra.FilterBuilds(testBuilds, filter)
 		assert.Len(t, filtered, 2)
 
 		// Combined filters
-		filter = &builds.BuildFilter{
+		filter = &hydra.BuildFilter{
 			Project: "nixpkgs",
 			Jobset:  "trunk",
 			System:  "x86_64-linux",
 		}
-		filtered = builds.FilterBuilds(testBuilds, filter)
+		filtered = hydra.FilterBuilds(testBuilds, filter)
 		assert.Len(t, filtered, 1)
 		assert.Equal(t, 1, filtered[0].ID)
 	})
 
 	t.Run("CalculateStatistics", func(t *testing.T) {
-		successStatus := models.BuildStatusSuccess
-		failedStatus := models.BuildStatusFailed
-		abortedStatus := models.BuildStatusAborted
-		timedOutStatus := models.BuildStatusTimedOut
+		successStatus := hydra.BuildStatusSuccess
+		failedStatus := hydra.BuildStatusFailed
+		abortedStatus := hydra.BuildStatusAborted
+		timedOutStatus := hydra.BuildStatusTimedOut
 
-		testBuilds := []models.Build{
+		testBuilds := []hydra.Build{
 			{ID: 1, Finished: true, BuildStatus: &successStatus},
 			{ID: 2, Finished: true, BuildStatus: &successStatus},
 			{ID: 3, Finished: true, BuildStatus: &failedStatus},
@@ -115,7 +112,7 @@ func TestBuildService(t *testing.T) {
 			{ID: 7, Finished: true, BuildStatus: nil},
 		}
 
-		stats := builds.CalculateStatistics(testBuilds)
+		stats := hydra.CalculateStatistics(testBuilds)
 
 		assert.Equal(t, 7, stats.Total)
 		assert.Equal(t, 2, stats.Succeeded)
@@ -132,7 +129,7 @@ func TestBuildService(t *testing.T) {
 
 func TestProjectService(t *testing.T) {
 	t.Run("CreateOptions builder", func(t *testing.T) {
-		opts := projects.NewCreateOptions("test-project", "testuser")
+		opts := hydra.NewCreateProjectOptions("test-project", "testuser")
 		assert.NotNil(t, opts)
 		assert.Equal(t, "test-project", opts.Name)
 		assert.Equal(t, "testuser", opts.Owner)
@@ -168,13 +165,13 @@ func TestProjectService(t *testing.T) {
 	})
 
 	t.Run("DeclarativeInput", func(t *testing.T) {
-		declarative := &models.DeclarativeInput{
+		declarative := &hydra.DeclarativeInput{
 			File:  "spec.json",
 			Type:  "git",
 			Value: "https://github.com/example/repo.git",
 		}
 
-		opts := projects.NewCreateOptions("test", "owner").
+		opts := hydra.NewCreateProjectOptions("test", "owner").
 			WithDeclarative(declarative)
 
 		req := opts.Build()
@@ -187,11 +184,11 @@ func TestProjectService(t *testing.T) {
 
 func TestJobsetService(t *testing.T) {
 	t.Run("JobsetOptions builder", func(t *testing.T) {
-		opts := jobsets.NewJobsetOptions("test-jobset", "test-project")
+		opts := hydra.NewCreateJobsetOptions("test-jobset", "test-project")
 		assert.NotNil(t, opts)
 		assert.Equal(t, "test-jobset", opts.Name)
 		assert.Equal(t, "test-project", opts.Project)
-		assert.Equal(t, models.JobsetStateEnabled, opts.Enabled)
+		assert.Equal(t, hydra.JobsetStateEnabled, opts.Enabled)
 		assert.True(t, opts.Visible)
 		assert.Equal(t, 3, opts.KeepNr)
 		assert.Equal(t, 300, opts.CheckInterval)
@@ -202,7 +199,7 @@ func TestJobsetService(t *testing.T) {
 			WithDescription("Test jobset").
 			WithNixExpression("nixpkgs", "release.nix").
 			WithFlake("github:NixOS/nixpkgs").
-			WithState(models.JobsetStateOneShot).
+			WithState(hydra.JobsetStateOneShot).
 			WithEmail(true, "test@example.com").
 			WithScheduling(600, 200).
 			WithKeepNr(5)
@@ -211,7 +208,7 @@ func TestJobsetService(t *testing.T) {
 		assert.Equal(t, "nixpkgs", opts.NixExprInput)
 		assert.Equal(t, "release.nix", opts.NixExprPath)
 		assert.Equal(t, "github:NixOS/nixpkgs", opts.Flake)
-		assert.Equal(t, models.JobsetStateOneShot, opts.Enabled)
+		assert.Equal(t, hydra.JobsetStateOneShot, opts.Enabled)
 		assert.True(t, opts.EnableEmail)
 		assert.Equal(t, "test@example.com", opts.EmailOverride)
 		assert.Equal(t, 600, opts.CheckInterval)
@@ -272,14 +269,14 @@ func TestContextCancellation(t *testing.T) {
 
 func TestConcurrentMapAccess(t *testing.T) {
 	// Test that concurrent access to shared maps is safe
-	inputs := make(map[string]models.JobsetInput)
+	inputs := make(map[string]hydra.JobsetInput)
 	var mu sync.Mutex
 
 	// Simulate concurrent writes
 	done := make(chan bool, 10)
 	for i := range 10 {
 		go func(id int) {
-			input := models.JobsetInput{
+			input := hydra.JobsetInput{
 				Name:  string(rune('a' + id)),
 				Type:  "git",
 				Value: "value",
@@ -303,14 +300,14 @@ func TestConcurrentMapAccess(t *testing.T) {
 func TestValidation(t *testing.T) {
 	t.Run("Project validation", func(t *testing.T) {
 		// Test that required fields are validated
-		req := &models.CreateProjectRequest{}
+		req := &hydra.CreateProjectRequest{}
 
 		// In a real implementation, these would be validated
 		assert.Empty(t, req.Name, "Name should be empty")
 		assert.Empty(t, req.Owner, "Owner should be empty")
 
 		// Valid request
-		req = &models.CreateProjectRequest{
+		req = &hydra.CreateProjectRequest{
 			Name:  "valid-project",
 			Owner: "valid-owner",
 		}
@@ -320,15 +317,15 @@ func TestValidation(t *testing.T) {
 
 	t.Run("Build ID validation", func(t *testing.T) {
 		// Negative IDs should be invalid
-		_, err := builds.ParseBuildID("-1")
+		_, err := hydra.ParseBuildID("-1")
 		assert.Error(t, err)
 
 		// Zero should be invalid
-		_, err = builds.ParseBuildID("0")
+		_, err = hydra.ParseBuildID("0")
 		assert.Error(t, err)
 
 		// Positive IDs should be valid
-		id, err := builds.ParseBuildID("12345")
+		id, err := hydra.ParseBuildID("12345")
 		assert.NoError(t, err)
 		assert.Equal(t, 12345, id)
 	})

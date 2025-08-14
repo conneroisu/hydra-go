@@ -21,7 +21,7 @@ func generateID() string {
 func (s *Server) cleanupSessions() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	now := time.Now()
 	for id, session := range s.sessions {
 		if now.Sub(session.CreatedAt) > 24*time.Hour {
@@ -34,17 +34,17 @@ func (s *Server) cleanupSessions() {
 func (s *Server) validateSession(sessionID string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	session, exists := s.sessions[sessionID]
 	if !exists {
 		return false
 	}
-	
+
 	// Check if session is expired
 	if time.Since(session.CreatedAt) > 24*time.Hour {
 		return false
 	}
-	
+
 	return true
 }
 

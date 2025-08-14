@@ -1,25 +1,28 @@
 # Ultra-simple NixOS VM test with real Hydra
-{ pkgs ? import <nixpkgs> {} }:
-
+{pkgs ? import <nixpkgs> {}}:
 pkgs.nixosTest {
   name = "hydra-sdk-test";
-  
-  nodes.machine = { config, pkgs, ... }: {
+
+  nodes.machine = {
+    config,
+    pkgs,
+    ...
+  }: {
     virtualisation.memorySize = 4096;
-    
+
     services.postgresql.enable = true;
-    
+
     services.hydra = {
       enable = true;
       hydraURL = "http://localhost:3000";
       notificationSender = "test@localhost";
     };
-    
+
     nix.settings.sandbox = false;
-    
-    environment.systemPackages = [ pkgs.curl ];
+
+    environment.systemPackages = [pkgs.curl];
   };
-  
+
   testScript = ''
     machine.start()
     machine.wait_for_unit("multi-user.target")

@@ -9,8 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/conneroisu/hydra-go/hydra"
-	"github.com/conneroisu/hydra-go/hydra/models"
+	"github.com/conneroisu/hydra-go"
 )
 
 func main() {
@@ -60,7 +59,7 @@ func main() {
 	// Test 3: Get specific project (if any exist)
 	fmt.Println("\nTest 3: Getting project details...")
 	if len(projects) > 0 {
-		var project *models.Project
+		var project *hydra.Project
 		project, err = client.GetProject(ctx, projects[0].Name)
 		if err != nil {
 			fmt.Printf("❌ Failed to get project: %v\n", err)
@@ -75,7 +74,7 @@ func main() {
 
 		// Test 4: List jobsets for the project
 		fmt.Println("\nTest 4: Listing jobsets...")
-		jobsets, err := client.Jobsets.List(ctx, projects[0].Name)
+		jobsets, err := client.ListJobsets(ctx, projects[0].Name)
 		if err != nil {
 			fmt.Printf("❌ Failed to list jobsets: %v\n", err)
 			testsFailed++
@@ -111,7 +110,7 @@ func main() {
 
 	// Test 6: Search functionality
 	fmt.Println("\nTest 6: Testing search...")
-	searchResults, err := client.SearchAll(ctx, "nixos")
+	searchResults, err := client.Search(ctx, "nixos")
 	if err != nil {
 		fmt.Printf("❌ Search failed: %v\n", err)
 		testsFailed++
@@ -126,7 +125,7 @@ func main() {
 	// Test 7: Create project (if authenticated)
 	if client.IsAuthenticated() {
 		fmt.Println("\nTest 7: Creating test project...")
-		projectReq := &models.CreateProjectRequest{
+		projectReq := &hydra.CreateProjectRequest{
 			Name:        "sdk-test-" + strconv.FormatInt(time.Now().Unix(), 10),
 			DisplayName: "SDK Test Project",
 			Description: "Created by Hydra Go SDK test",
@@ -135,7 +134,7 @@ func main() {
 			Visible:     true,
 		}
 
-		resp, err := client.Projects.Create(ctx, projectReq.Name, projectReq)
+		resp, err := client.CreateProject(ctx, projectReq.Name, projectReq)
 		if err != nil {
 			fmt.Printf("❌ Failed to create project: %v\n", err)
 			testsFailed++
@@ -145,7 +144,7 @@ func main() {
 
 			// Clean up - delete the test project
 			fmt.Println("\nTest 8: Cleaning up test project...")
-			err = client.Projects.Delete(ctx, projectReq.Name)
+			err = client.DeleteProject(ctx, projectReq.Name)
 			if err != nil {
 				fmt.Printf("❌ Failed to delete project: %v\n", err)
 				testsFailed++

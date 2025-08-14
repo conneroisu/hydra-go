@@ -4,26 +4,26 @@ import (
 	"testing"
 	"time"
 
-	"github.com/conneroisu/hydra-go/hydra/models"
+	"github.com/conneroisu/hydra-go"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestBuildStatusConstants(t *testing.T) {
 	tests := []struct {
 		name   string
-		status models.BuildStatus
+		status hydra.BuildStatus
 		want   int
 	}{
-		{"Success", models.BuildStatusSuccess, 0},
-		{"Failed", models.BuildStatusFailed, 1},
-		{"DependencyFailed", models.BuildStatusDependencyFailed, 2},
-		{"Aborted", models.BuildStatusAborted, 3},
-		{"Aborted2", models.BuildStatusAborted2, 9},
-		{"CanceledByUser", models.BuildStatusCanceledByUser, 4},
-		{"FailedWithOutput", models.BuildStatusFailedWithOutput, 6},
-		{"TimedOut", models.BuildStatusTimedOut, 7},
-		{"LogSizeLimitExceeded", models.BuildStatusLogSizeLimitExceeded, 10},
-		{"OutputSizeLimitExceeded", models.BuildStatusOutputSizeLimitExceeded, 11},
+		{"Success", hydra.BuildStatusSuccess, 0},
+		{"Failed", hydra.BuildStatusFailed, 1},
+		{"DependencyFailed", hydra.BuildStatusDependencyFailed, 2},
+		{"Aborted", hydra.BuildStatusAborted, 3},
+		{"Aborted2", hydra.BuildStatusAborted2, 9},
+		{"CanceledByUser", hydra.BuildStatusCanceledByUser, 4},
+		{"FailedWithOutput", hydra.BuildStatusFailedWithOutput, 6},
+		{"TimedOut", hydra.BuildStatusTimedOut, 7},
+		{"LogSizeLimitExceeded", hydra.BuildStatusLogSizeLimitExceeded, 10},
+		{"OutputSizeLimitExceeded", hydra.BuildStatusOutputSizeLimitExceeded, 11},
 	}
 
 	for _, tt := range tests {
@@ -35,10 +35,10 @@ func TestBuildStatusConstants(t *testing.T) {
 
 func TestBuildMethods(t *testing.T) {
 	t.Run("IsSuccess", func(t *testing.T) {
-		successStatus := models.BuildStatusSuccess
-		failedStatus := models.BuildStatusFailed
+		successStatus := hydra.BuildStatusSuccess
+		failedStatus := hydra.BuildStatusFailed
 
-		build := &models.Build{
+		build := &hydra.Build{
 			BuildStatus: &successStatus,
 			Finished:    true,
 		}
@@ -52,11 +52,11 @@ func TestBuildMethods(t *testing.T) {
 	})
 
 	t.Run("IsFailed", func(t *testing.T) {
-		failedStatus := models.BuildStatusFailed
-		depFailedStatus := models.BuildStatusDependencyFailed
-		successStatus := models.BuildStatusSuccess
+		failedStatus := hydra.BuildStatusFailed
+		depFailedStatus := hydra.BuildStatusDependencyFailed
+		successStatus := hydra.BuildStatusSuccess
 
-		build := &models.Build{
+		build := &hydra.Build{
 			BuildStatus: &failedStatus,
 			Finished:    true,
 		}
@@ -72,14 +72,15 @@ func TestBuildMethods(t *testing.T) {
 	t.Run("GetBuildStatusString", func(t *testing.T) {
 		tests := []struct {
 			name     string
-			build    *models.Build
+			build    *hydra.Build
 			expected string
 		}{
 			{
 				name: "succeeded",
-				build: &models.Build{
-					BuildStatus: func() *models.BuildStatus {
-						s := models.BuildStatusSuccess
+				build: &hydra.Build{
+					BuildStatus: func() *hydra.BuildStatus {
+						s := hydra.BuildStatusSuccess
+
 						return &s
 					}(),
 					Finished: true,
@@ -88,9 +89,10 @@ func TestBuildMethods(t *testing.T) {
 			},
 			{
 				name: "failed",
-				build: &models.Build{
-					BuildStatus: func() *models.BuildStatus {
-						s := models.BuildStatusFailed
+				build: &hydra.Build{
+					BuildStatus: func() *hydra.BuildStatus {
+						s := hydra.BuildStatusFailed
+
 						return &s
 					}(),
 					Finished: true,
@@ -99,7 +101,7 @@ func TestBuildMethods(t *testing.T) {
 			},
 			{
 				name: "in progress",
-				build: &models.Build{
+				build: &hydra.Build{
 					BuildStatus: nil,
 					Finished:    false,
 				},
@@ -107,7 +109,7 @@ func TestBuildMethods(t *testing.T) {
 			},
 			{
 				name: "unknown",
-				build: &models.Build{
+				build: &hydra.Build{
 					BuildStatus: nil,
 					Finished:    true,
 				},
@@ -124,7 +126,7 @@ func TestBuildMethods(t *testing.T) {
 
 	t.Run("Time functions", func(t *testing.T) {
 		now := time.Now().Unix()
-		build := &models.Build{
+		build := &hydra.Build{
 			StartTime: now - 300,
 			StopTime:  now,
 			Timestamp: now - 400,
@@ -147,7 +149,7 @@ func TestBuildMethods(t *testing.T) {
 		assert.Equal(t, now-400, timestamp.Unix())
 
 		// Test with zero times
-		emptyBuild := &models.Build{}
+		emptyBuild := &hydra.Build{}
 		assert.Equal(t, time.Duration(0), emptyBuild.GetDuration())
 		assert.Equal(t, time.Unix(0, 0), emptyBuild.GetStartTime())
 	})
@@ -155,14 +157,14 @@ func TestBuildMethods(t *testing.T) {
 
 func TestJobsetMethods(t *testing.T) {
 	t.Run("JobsetState", func(t *testing.T) {
-		assert.Equal(t, 0, int(models.JobsetStateDisabled))
-		assert.Equal(t, 1, int(models.JobsetStateEnabled))
-		assert.Equal(t, 2, int(models.JobsetStateOneShot))
-		assert.Equal(t, 3, int(models.JobsetStateOneAtTime))
+		assert.Equal(t, 0, int(hydra.JobsetStateDisabled))
+		assert.Equal(t, 1, int(hydra.JobsetStateEnabled))
+		assert.Equal(t, 2, int(hydra.JobsetStateOneShot))
+		assert.Equal(t, 3, int(hydra.JobsetStateOneAtTime))
 	})
 
 	t.Run("IsEnabled", func(t *testing.T) {
-		jobset := &models.Jobset{Enabled: 0}
+		jobset := &hydra.Jobset{Enabled: 0}
 		assert.False(t, jobset.IsEnabled())
 
 		jobset.Enabled = 1
@@ -176,26 +178,26 @@ func TestJobsetMethods(t *testing.T) {
 	})
 
 	t.Run("GetState and SetState", func(t *testing.T) {
-		jobset := &models.Jobset{Enabled: 0}
-		assert.Equal(t, models.JobsetStateDisabled, jobset.GetState())
+		jobset := &hydra.Jobset{Enabled: 0}
+		assert.Equal(t, hydra.JobsetStateDisabled, jobset.GetState())
 
-		jobset.SetState(models.JobsetStateEnabled)
+		jobset.SetState(hydra.JobsetStateEnabled)
 		assert.Equal(t, 1, jobset.Enabled)
-		assert.Equal(t, models.JobsetStateEnabled, jobset.GetState())
+		assert.Equal(t, hydra.JobsetStateEnabled, jobset.GetState())
 
-		jobset.SetState(models.JobsetStateOneShot)
+		jobset.SetState(hydra.JobsetStateOneShot)
 		assert.Equal(t, 2, jobset.Enabled)
-		assert.Equal(t, models.JobsetStateOneShot, jobset.GetState())
+		assert.Equal(t, hydra.JobsetStateOneShot, jobset.GetState())
 
-		jobset.SetState(models.JobsetStateOneAtTime)
+		jobset.SetState(hydra.JobsetStateOneAtTime)
 		assert.Equal(t, 3, jobset.Enabled)
-		assert.Equal(t, models.JobsetStateOneAtTime, jobset.GetState())
+		assert.Equal(t, hydra.JobsetStateOneAtTime, jobset.GetState())
 	})
 }
 
 func TestProjectMethods(t *testing.T) {
 	t.Run("Project validation", func(t *testing.T) {
-		project := &models.Project{
+		project := &hydra.Project{
 			Name:        "test-project",
 			DisplayName: "Test Project",
 			Owner:       "testuser",
@@ -211,7 +213,7 @@ func TestProjectMethods(t *testing.T) {
 	})
 
 	t.Run("CreateProjectRequest", func(t *testing.T) {
-		req := &models.CreateProjectRequest{
+		req := &hydra.CreateProjectRequest{
 			Name:                    "new-project",
 			DisplayName:             "New Project",
 			Description:             "A new test project",
@@ -234,20 +236,20 @@ func TestProjectMethods(t *testing.T) {
 }
 
 func TestSearchResult(t *testing.T) {
-	result := &models.SearchResult{
-		Projects: []models.Project{
+	result := &hydra.SearchResult{
+		Projects: []hydra.Project{
 			{Name: "project1"},
 			{Name: "project2"},
 		},
-		Jobsets: []models.Jobset{
+		Jobsets: []hydra.Jobset{
 			{Name: "jobset1"},
 		},
-		Builds: []models.Build{
+		Builds: []hydra.Build{
 			{ID: 1, NixName: "build1"},
 			{ID: 2, NixName: "build2"},
 			{ID: 3, NixName: "build3"},
 		},
-		BuildsDrv: []models.Build{},
+		BuildsDrv: []hydra.Build{},
 	}
 
 	assert.Len(t, result.Projects, 2)
@@ -257,7 +259,7 @@ func TestSearchResult(t *testing.T) {
 }
 
 func TestUser(t *testing.T) {
-	user := &models.User{
+	user := &hydra.User{
 		Username:     "testuser",
 		FullName:     "Test User",
 		EmailAddress: "test@example.com",
@@ -272,7 +274,7 @@ func TestUser(t *testing.T) {
 }
 
 func TestJobsetInput(t *testing.T) {
-	input := models.JobsetInput{
+	input := hydra.JobsetInput{
 		Name:             "nixpkgs",
 		Type:             "git",
 		Value:            "https://github.com/NixOS/nixpkgs.git master",
@@ -286,7 +288,7 @@ func TestJobsetInput(t *testing.T) {
 }
 
 func TestEvaluations(t *testing.T) {
-	eval := &models.JobsetEval{
+	eval := &hydra.JobsetEval{
 		ID:           123,
 		Timestamp:    time.Now().Unix(),
 		HasNewBuilds: true,
@@ -297,10 +299,10 @@ func TestEvaluations(t *testing.T) {
 	assert.True(t, eval.HasNewBuilds)
 	assert.Len(t, eval.Builds, 3)
 
-	evals := &models.Evaluations{
+	evals := &hydra.Evaluations{
 		First: "?page=1",
 		Last:  "?page=10",
-		Evals: []map[string]*models.JobsetEval{
+		Evals: []map[string]*hydra.JobsetEval{
 			{"1": eval},
 		},
 	}

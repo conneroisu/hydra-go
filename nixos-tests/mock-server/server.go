@@ -24,10 +24,10 @@ type Session struct {
 }
 
 type TestData struct {
-	Projects  []Project      `json:"projects"`
-	Jobsets   []Jobset       `json:"jobsets"`
-	Builds    []Build        `json:"builds"`
-	Users     []User         `json:"users"`
+	Projects []Project `json:"projects"`
+	Jobsets  []Jobset  `json:"jobsets"`
+	Builds   []Build   `json:"builds"`
+	Users    []User    `json:"users"`
 }
 
 func NewServer() *Server {
@@ -46,7 +46,7 @@ func loadTestData() *TestData {
 			return data
 		}
 	}
-	
+
 	// Load from fixtures file or use defaults
 	data := &TestData{
 		Projects: []Project{
@@ -116,30 +116,30 @@ func loadTestData() *TestData {
 			},
 		},
 	}
-	
+
 	// Try to load from fixtures file
 	if fileData, err := os.ReadFile("/etc/mock-hydra-server/fixtures.json"); err == nil {
 		if err := json.Unmarshal(fileData, data); err != nil {
 			log.Printf("Failed to parse fixtures: %v", err)
 		}
 	}
-	
+
 	return data
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%s %s", r.Method, r.URL.Path)
-	
+
 	// Set CORS headers
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-	
+
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	
+
 	// Route requests
 	switch {
 	case r.URL.Path == "/health":
@@ -168,7 +168,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
-		"status": "healthy",
+		"status":  "healthy",
 		"service": "mock-hydra-server",
 	})
 }
@@ -179,7 +179,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
 		return
 	}
-	
+
 	// Check credentials
 	var user *User
 	for _, u := range s.data.Users {
@@ -188,12 +188,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	
+
 	if user == nil {
 		http.Error(w, `{"error":"invalid credentials"}`, http.StatusUnauthorized)
 		return
 	}
-	
+
 	// Create session
 	sessionID := generateSessionID()
 	s.mu.Lock()
@@ -202,7 +202,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: time.Now(),
 	}
 	s.mu.Unlock()
-	
+
 	// Set session cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "hydra_session",
@@ -211,7 +211,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		MaxAge:   86400, // 24 hours
 	})
-	
+
 	// Return user info
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -233,9 +233,9 @@ func (s *Server) handleProject(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	
+
 	projectName := parts[2]
-	
+
 	switch r.Method {
 	case "GET":
 		for _, p := range s.data.Projects {
@@ -246,7 +246,7 @@ func (s *Server) handleProject(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
-		
+
 	case "PUT":
 		// Create/update project
 		var req Project
@@ -254,9 +254,9 @@ func (s *Server) handleProject(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
 			return
 		}
-		
+
 		req.Name = projectName
-		
+
 		// Update or add project
 		found := false
 		for i, p := range s.data.Projects {
@@ -269,14 +269,14 @@ func (s *Server) handleProject(w http.ResponseWriter, r *http.Request) {
 		if !found {
 			s.data.Projects = append(s.data.Projects, req)
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{
 			"redirect": "/project/" + projectName,
 			"uri":      "/project/" + projectName,
 			"name":     projectName,
 		})
-		
+
 	case "DELETE":
 		// Delete project
 		for i, p := range s.data.Projects {
@@ -290,7 +290,7 @@ func (s *Server) handleProject(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
-		
+
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -302,16 +302,16 @@ func (s *Server) handleJobset(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	
+
 	projectName := parts[2]
 	jobsetName := parts[3]
-	
+
 	// Handle evaluations endpoint
 	if len(parts) > 4 && parts[4] == "evals" {
 		s.handleEvaluations(w, r, projectName, jobsetName)
 		return
 	}
-	
+
 	switch r.Method {
 	case "GET":
 		for _, j := range s.data.Jobsets {
@@ -322,7 +322,7 @@ func (s *Server) handleJobset(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		http.Error(w, `{"error":"jobset not found"}`, http.StatusNotFound)
-		
+
 	case "PUT":
 		// Create/update jobset
 		var req Jobset
@@ -330,10 +330,10 @@ func (s *Server) handleJobset(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
 			return
 		}
-		
+
 		req.Name = jobsetName
 		req.Project = projectName
-		
+
 		// Update or add jobset
 		found := false
 		for i, j := range s.data.Jobsets {
@@ -346,12 +346,12 @@ func (s *Server) handleJobset(w http.ResponseWriter, r *http.Request) {
 		if !found {
 			s.data.Jobsets = append(s.data.Jobsets, req)
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{
 			"redirect": fmt.Sprintf("/jobset/%s/%s", projectName, jobsetName),
 		})
-		
+
 	case "DELETE":
 		// Delete jobset
 		for i, j := range s.data.Jobsets {
@@ -365,7 +365,7 @@ func (s *Server) handleJobset(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		http.Error(w, `{"error":"jobset not found"}`, http.StatusNotFound)
-		
+
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -377,20 +377,20 @@ func (s *Server) handleBuild(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	
+
 	buildID, err := strconv.Atoi(parts[2])
 	if err != nil {
 		http.Error(w, `{"error":"invalid build ID"}`, http.StatusBadRequest)
 		return
 	}
-	
+
 	// Handle constituents endpoint
 	if len(parts) > 3 && parts[3] == "constituents" {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]Build{}) // Return empty array for now
 		return
 	}
-	
+
 	for _, b := range s.data.Builds {
 		if b.ID == buildID {
 			w.Header().Set("Content-Type", "application/json")
@@ -398,7 +398,7 @@ func (s *Server) handleBuild(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	
+
 	http.Error(w, `{"error":"build not found"}`, http.StatusNotFound)
 }
 
@@ -408,13 +408,13 @@ func (s *Server) handleEvaluation(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	
+
 	evalID, err := strconv.Atoi(parts[2])
 	if err != nil {
 		http.Error(w, `{"error":"invalid evaluation ID"}`, http.StatusBadRequest)
 		return
 	}
-	
+
 	// Handle builds endpoint
 	if len(parts) > 3 && parts[3] == "builds" {
 		w.Header().Set("Content-Type", "application/json")
@@ -428,7 +428,7 @@ func (s *Server) handleEvaluation(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(builds)
 		return
 	}
-	
+
 	// Return mock evaluation
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(JobsetEval{
@@ -441,11 +441,11 @@ func (s *Server) handleEvaluation(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleEvaluations(w http.ResponseWriter, r *http.Request, projectName, jobsetName string) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	// Return mock evaluations
 	evals := Evaluations{
-		First:  "?page=1",
-		Last:   "?page=1",
+		First: "?page=1",
+		Last:  "?page=1",
 		Evals: []map[string]*JobsetEval{
 			{
 				"1": &JobsetEval{
@@ -457,60 +457,60 @@ func (s *Server) handleEvaluations(w http.ResponseWriter, r *http.Request, proje
 			},
 		},
 	}
-	
+
 	json.NewEncoder(w).Encode(evals)
 }
 
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("query")
-	
+
 	results := SearchResult{
 		Projects:  []Project{},
 		Jobsets:   []Jobset{},
 		Builds:    []Build{},
 		BuildsDrv: []Build{},
 	}
-	
+
 	// Simple search implementation
 	queryLower := strings.ToLower(query)
-	
+
 	for _, p := range s.data.Projects {
 		if strings.Contains(strings.ToLower(p.Name), queryLower) ||
-		   strings.Contains(strings.ToLower(p.Description), queryLower) {
+			strings.Contains(strings.ToLower(p.Description), queryLower) {
 			results.Projects = append(results.Projects, p)
 		}
 	}
-	
+
 	for _, j := range s.data.Jobsets {
 		if strings.Contains(strings.ToLower(j.Name), queryLower) ||
-		   strings.Contains(strings.ToLower(j.Description), queryLower) {
+			strings.Contains(strings.ToLower(j.Description), queryLower) {
 			results.Jobsets = append(results.Jobsets, j)
 		}
 	}
-	
+
 	for _, b := range s.data.Builds {
 		if strings.Contains(strings.ToLower(b.NixName), queryLower) ||
-		   strings.Contains(strings.ToLower(b.Job), queryLower) {
+			strings.Contains(strings.ToLower(b.Job), queryLower) {
 			results.Builds = append(results.Builds, b)
 		}
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(results)
 }
 
 func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/")
-	
+
 	switch {
 	case path == "push" && r.Method == "POST":
 		// Handle trigger evaluation
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status": "triggered",
+			"status":  "triggered",
 			"jobsets": r.URL.Query().Get("jobsets"),
 		})
-		
+
 	case strings.HasPrefix(path, "jobsets"):
 		// Handle jobsets listing - return as array for JobsetOverview
 		project := r.URL.Query().Get("project")
@@ -522,7 +522,7 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(jobsets)
-		
+
 	default:
 		http.NotFound(w, r)
 	}
@@ -550,15 +550,15 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	
+
 	host := os.Getenv("HOST")
 	if host == "" {
 		host = "localhost"
 	}
-	
+
 	server := NewServer()
 	addr := fmt.Sprintf("%s:%s", host, port)
-	
+
 	log.Printf("Mock Hydra server starting on %s", addr)
 	if err := http.ListenAndServe(addr, server); err != nil {
 		log.Fatal(err)

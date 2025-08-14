@@ -6,10 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/conneroisu/hydra-go/hydra"
-	"github.com/conneroisu/hydra-go/hydra/jobsets"
-	"github.com/conneroisu/hydra-go/hydra/models"
-	"github.com/conneroisu/hydra-go/hydra/projects"
+	"github.com/conneroisu/hydra-go"
 )
 
 func main() {
@@ -49,14 +46,14 @@ func main() {
 	if client.IsAuthenticated() {
 		fmt.Println("\n=== Creating a Test Project ===")
 
-		projectOpts := projects.NewCreateOptions("test-project", username).
+		projectOpts := hydra.NewCreateProjectOptions("test-project", username).
 			WithDisplayName("Test Project").
 			WithDescription("A test project created via the Hydra Go SDK").
 			WithHomepage("https://example.com").
 			WithEnabled(true).
 			WithVisible(true)
 
-		resp, err := client.Projects.CreateWithOptions(ctx, "test-project", projectOpts)
+		resp, err := client.CreateProjectWithOptions(ctx, "test-project", projectOpts)
 		if err != nil {
 			log.Printf("Failed to create project: %v", err)
 		} else {
@@ -68,15 +65,15 @@ func main() {
 		// Example: Create a jobset
 		fmt.Println("\n=== Creating a Test Jobset ===")
 
-		jobsetOpts := jobsets.NewJobsetOptions("test-jobset", "test-project").
+		jobsetOpts := hydra.NewCreateJobsetOptions("test-jobset", "test-project").
 			WithDescription("Test jobset").
 			WithNixExpression("nixpkgs", "release.nix").
-			WithState(models.JobsetStateEnabled).
+			WithState(hydra.JobsetStateEnabled).
 			WithScheduling(300, 100).
 			AddInput("nixpkgs", "git", "https://github.com/NixOS/nixpkgs.git", false).
 			AddInput("officialRelease", "boolean", "false", false)
 
-		jobsetResp, err := client.Jobsets.CreateWithOptions(ctx, "test-project", "test-jobset", jobsetOpts)
+		jobsetResp, err := client.CreateJobsetWithOptions(ctx, "test-project", "test-jobset", jobsetOpts)
 		if err != nil {
 			log.Printf("Failed to create jobset: %v", err)
 		} else {
@@ -86,7 +83,7 @@ func main() {
 
 		// Trigger evaluation
 		fmt.Println("\n=== Triggering Evaluation ===")
-		pushResp, err := client.TriggerEvaluation(ctx, "test-project", "test-jobset")
+		pushResp, err := client.TriggerJobset(ctx, "test-project", "test-jobset")
 		if err != nil {
 			log.Printf("Failed to trigger evaluation: %v", err)
 		} else {

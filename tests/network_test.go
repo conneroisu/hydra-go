@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package tests
@@ -11,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/conneroisu/hydra-go/hydra"
+	"github.com/conneroisu/hydra-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -21,27 +22,27 @@ func TestNetworkResilience(t *testing.T) {
 		// Try to connect to a port that's not listening
 		client, err := hydra.NewClientWithURL("http://localhost:9999")
 		require.NoError(t, err)
-		
+
 		ctx := context.Background()
 		_, err = client.ListProjects(ctx)
 		assert.Error(t, err)
-		
+
 		// Check that the error is a connection error
 		if netErr, ok := err.(*net.OpError); ok {
 			assert.Equal(t, "dial", netErr.Op)
 		}
 	})
-	
+
 	t.Run("handle DNS resolution failure", func(t *testing.T) {
 		// Use a non-existent domain
 		client, err := hydra.NewClientWithURL("http://this-domain-definitely-does-not-exist-12345.com")
 		require.NoError(t, err)
-		
+
 		ctx := context.Background()
 		_, err = client.ListProjects(ctx)
 		assert.Error(t, err)
 	})
-	
+
 	t.Run("handle slow server", func(t *testing.T) {
 		// Create a slow server
 		slowServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +51,7 @@ func TestNetworkResilience(t *testing.T) {
 			w.Write([]byte("[]"))
 		}))
 		defer slowServer.Close()
-		
+
 		// Create client with very short timeout
 		cfg := &hydra.Config{
 			BaseURL: slowServer.URL,
@@ -58,12 +59,12 @@ func TestNetworkResilience(t *testing.T) {
 		}
 		client, err := hydra.NewClient(cfg)
 		require.NoError(t, err)
-		
+
 		ctx := context.Background()
 		_, err = client.ListProjects(ctx)
 		assert.Error(t, err)
 	})
-	
+
 	t.Run("handle server returning invalid JSON", func(t *testing.T) {
 		badServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
@@ -71,16 +72,16 @@ func TestNetworkResilience(t *testing.T) {
 			w.Write([]byte("this is not valid JSON"))
 		}))
 		defer badServer.Close()
-		
+
 		client, err := hydra.NewClientWithURL(badServer.URL)
 		require.NoError(t, err)
-		
+
 		ctx := context.Background()
 		_, err = client.ListProjects(ctx)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "unmarshal")
 	})
-	
+
 	t.Run("handle various HTTP status codes", func(t *testing.T) {
 		testCases := []struct {
 			name       string
@@ -94,7 +95,7 @@ func TestNetworkResilience(t *testing.T) {
 			{"internal server error", http.StatusInternalServerError, `{"error":"internal server error"}`},
 			{"service unavailable", http.StatusServiceUnavailable, `{"error":"service unavailable"}`},
 		}
-		
+
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -103,10 +104,10 @@ func TestNetworkResilience(t *testing.T) {
 					w.Write([]byte(tc.response))
 				}))
 				defer server.Close()
-				
+
 				client, err := hydra.NewClientWithURL(server.URL)
 				require.NoError(t, err)
-				
+
 				ctx := context.Background()
 				_, err = client.ListProjects(ctx)
 				assert.Error(t, err)
@@ -114,7 +115,7 @@ func TestNetworkResilience(t *testing.T) {
 			})
 		}
 	})
-	
+
 	t.Run("handle redirect", func(t *testing.T) {
 		redirectServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/redirect" {
@@ -126,21 +127,21 @@ func TestNetworkResilience(t *testing.T) {
 			w.Write([]byte("[]"))
 		}))
 		defer redirectServer.Close()
-		
+
 		client, err := hydra.NewClientWithURL(redirectServer.URL + "/redirect")
 		require.NoError(t, err)
-		
+
 		ctx := context.Background()
 		projects, err := client.ListProjects(ctx)
 		assert.NoError(t, err)
 		assert.NotNil(t, projects)
 	})
-	
+
 	t.Run("handle chunked response", func(t *testing.T) {
 		chunkedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Transfer-Encoding", "chunked")
-			
+
 			// Write response in chunks
 			flusher, ok := w.(http.Flusher)
 			if ok {
@@ -157,10 +158,10 @@ func TestNetworkResilience(t *testing.T) {
 			}
 		}))
 		defer chunkedServer.Close()
-		
+
 		client, err := hydra.NewClientWithURL(chunkedServer.URL)
 		require.NoError(t, err)
-		
+
 		ctx := context.Background()
 		projects, err := client.ListProjects(ctx)
 		assert.NoError(t, err)
@@ -176,15 +177,15 @@ func TestEnvironmentVariables(t *testing.T) {
 		// if url == "" {
 		//     url = "https://hydra.nixos.org"
 		// }
-		
+
 		testURL := getTestURL()
 		assert.NotEmpty(t, testURL)
 	})
-	
+
 	t.Run("proxy configuration", func(t *testing.T) {
 		// Test that HTTP proxy settings are respected
 		// This would normally use HTTP_PROXY and HTTPS_PROXY env vars
-		
+
 		proxyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Proxy would forward the request
 			w.Header().Set("X-Proxied", "true")
@@ -192,19 +193,19 @@ func TestEnvironmentVariables(t *testing.T) {
 			w.Write([]byte("[]"))
 		}))
 		defer proxyServer.Close()
-		
+
 		// In a real scenario, you'd set up the proxy in the HTTP client
 		// For testing, we'll just verify the client can be configured
 		httpClient := &http.Client{
 			Timeout: 10 * time.Second,
 			// Proxy configuration would go here
 		}
-		
+
 		cfg := &hydra.Config{
 			BaseURL:    proxyServer.URL,
 			HTTPClient: httpClient,
 		}
-		
+
 		client, err := hydra.NewClient(cfg)
 		require.NoError(t, err)
 		assert.NotNil(t, client)
@@ -227,19 +228,19 @@ func TestRateLimiting(t *testing.T) {
 			}
 		}))
 		defer rateLimitServer.Close()
-		
+
 		client, err := hydra.NewClientWithURL(rateLimitServer.URL)
 		require.NoError(t, err)
-		
+
 		ctx := context.Background()
-		
+
 		// First three requests should fail with rate limit
 		for i := 0; i < 3; i++ {
 			_, err = client.ListProjects(ctx)
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "429")
 		}
-		
+
 		// Fourth request should succeed
 		projects, err := client.ListProjects(ctx)
 		assert.NoError(t, err)
@@ -261,7 +262,7 @@ func TestContentTypes(t *testing.T) {
 			{"plain text", "text/plain", "Error", true},
 			{"no content type", "", "[]", false},
 		}
-		
+
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -272,13 +273,13 @@ func TestContentTypes(t *testing.T) {
 					w.Write([]byte(tc.body))
 				}))
 				defer server.Close()
-				
+
 				client, err := hydra.NewClientWithURL(server.URL)
 				require.NoError(t, err)
-				
+
 				ctx := context.Background()
 				_, err = client.ListProjects(ctx)
-				
+
 				if tc.shouldError {
 					assert.Error(t, err)
 				} else {
@@ -294,7 +295,7 @@ func TestLargeResponses(t *testing.T) {
 		largeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			
+
 			// Generate a large response
 			w.Write([]byte("["))
 			for i := 0; i < 1000; i++ {
@@ -307,10 +308,10 @@ func TestLargeResponses(t *testing.T) {
 			w.Write([]byte("]"))
 		}))
 		defer largeServer.Close()
-		
+
 		client, err := hydra.NewClientWithURL(largeServer.URL)
 		require.NoError(t, err)
-		
+
 		ctx := context.Background()
 		projects, err := client.ListProjects(ctx)
 		assert.NoError(t, err)
@@ -329,7 +330,7 @@ func TestKeepAlive(t *testing.T) {
 			w.Write([]byte("[]"))
 		}))
 		defer keepAliveServer.Close()
-		
+
 		// Create client with connection pooling
 		httpClient := &http.Client{
 			Timeout: 10 * time.Second,
@@ -339,23 +340,23 @@ func TestKeepAlive(t *testing.T) {
 				IdleConnTimeout:     30 * time.Second,
 			},
 		}
-		
+
 		cfg := &hydra.Config{
 			BaseURL:    keepAliveServer.URL,
 			HTTPClient: httpClient,
 		}
-		
+
 		client, err := hydra.NewClient(cfg)
 		require.NoError(t, err)
-		
+
 		ctx := context.Background()
-		
+
 		// Make multiple requests
 		for i := 0; i < 5; i++ {
 			_, err = client.ListProjects(ctx)
 			assert.NoError(t, err)
 		}
-		
+
 		// Connection should be reused (this is more of a demonstration)
 		// In reality, testing connection reuse requires more sophisticated monitoring
 		assert.Equal(t, 5, connectionCount)

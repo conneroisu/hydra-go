@@ -126,7 +126,9 @@ func (c *Client) DoRequest(ctx context.Context, method, path string, body interf
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close() // Ignore error as it's a cleanup operation
+	}()
 
 	// Read response body
 	respBody, err := io.ReadAll(resp.Body)

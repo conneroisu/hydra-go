@@ -33,7 +33,8 @@
       rooted = exec:
         builtins.concatStringsSep "\n"
         [
-          ''REPO_ROOT="$(git rev-parse --show-toplevel)"''
+          ''            # shellcheck disable=SC2034
+                      REPO_ROOT="$(git rev-parse --show-toplevel)"''
           exec
         ];
 
