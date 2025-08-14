@@ -32,6 +32,11 @@ type User struct {
 	FullName string `json:"fullname"`
 }
 
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 func main() {
 	// Health check server
 	go func() {
@@ -75,6 +80,13 @@ func handleProjects(w http.ResponseWriter, r *http.Request) {
 			Enabled:     1,
 			Hidden:      0,
 		},
+		{
+			Name:        "hydra",
+			DisplayName: "Hydra",
+			Description: "Hydra continuous integration system",
+			Enabled:     1,
+			Hidden:      0,
+		},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -84,7 +96,8 @@ func handleProjects(w http.ResponseWriter, r *http.Request) {
 func handleProject(w http.ResponseWriter, r *http.Request) {
 	projectName := strings.TrimPrefix(r.URL.Path, "/api/project/")
 
-	if projectName == "nixpkgs" {
+	switch projectName {
+	case "nixpkgs":
 		project := Project{
 			Name:        "nixpkgs",
 			DisplayName: "Nixpkgs",
@@ -94,7 +107,17 @@ func handleProject(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(project)
-	} else {
+	case "hydra":
+		project := Project{
+			Name:        "hydra",
+			DisplayName: "Hydra",
+			Description: "Hydra continuous integration system",
+			Enabled:     1,
+			Hidden:      0,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(project)
+	default:
 		http.NotFound(w, r)
 	}
 }
@@ -128,14 +151,16 @@ func handleBuild(w http.ResponseWriter, r *http.Request) {
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-
 		return
 	}
 
-	username := r.FormValue("username")
-	password := r.FormValue("password")
+	var loginReq LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&loginReq); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
 
-	if username == "admin" && password == "admin" {
+	if loginReq.Username == "admin" && loginReq.Password == "admin" {
 		user := User{
 			Username: "admin",
 			FullName: "Admin",
