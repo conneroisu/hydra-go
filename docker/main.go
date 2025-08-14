@@ -11,8 +11,8 @@ type Project struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"displayname"`
 	Description string `json:"description"`
-	Enabled     int    `json:"enabled"`
-	Hidden      int    `json:"hidden"`
+	Enabled     bool   `json:"enabled"`
+	Hidden      bool   `json:"hidden"`
 }
 
 type Build struct {
@@ -73,15 +73,15 @@ func handleProjects(w http.ResponseWriter, r *http.Request) {
 			Name:        "nixpkgs",
 			DisplayName: "Nixpkgs",
 			Description: "Nix packages collection",
-			Enabled:     1,
-			Hidden:      0,
+			Enabled:     true,
+			Hidden:      false,
 		},
 		{
 			Name:        "hydra",
 			DisplayName: "Hydra",
 			Description: "Hydra continuous integration system",
-			Enabled:     1,
-			Hidden:      0,
+			Enabled:     true,
+			Hidden:      false,
 		},
 	}
 
@@ -98,8 +98,8 @@ func handleProject(w http.ResponseWriter, r *http.Request) {
 			Name:        "nixpkgs",
 			DisplayName: "Nixpkgs",
 			Description: "Nix packages collection",
-			Enabled:     1,
-			Hidden:      0,
+			Enabled:     true,
+			Hidden:      false,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(project)
@@ -108,8 +108,8 @@ func handleProject(w http.ResponseWriter, r *http.Request) {
 			Name:        "hydra",
 			DisplayName: "Hydra",
 			Description: "Hydra continuous integration system",
-			Enabled:     1,
-			Hidden:      0,
+			Enabled:     true,
+			Hidden:      false,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(project)
