@@ -21,16 +21,23 @@ type Project struct {
 }
 
 type Build struct {
-	ID          int    `json:"id"`
-	Project     string `json:"project"`
-	Jobset      string `json:"jobset"`
-	Job         string `json:"job"`
-	Timestamp   int64  `json:"timestamp"`
-	StartTime   int64  `json:"starttime"`
-	StopTime    int64  `json:"stoptime"`
-	BuildStatus int    `json:"buildstatus"`
-	NixName     string `json:"nixname"`
-	Finished    bool   `json:"-"`
+	ID            int                      `json:"id"`
+	Project       string                   `json:"project"`
+	Jobset        string                   `json:"jobset"`
+	Job           string                   `json:"job"`
+	Timestamp     int64                    `json:"timestamp"`
+	StartTime     int64                    `json:"starttime"`
+	StopTime      int64                    `json:"stoptime"`
+	BuildStatus   int                      `json:"buildstatus"`
+	NixName       string                   `json:"nixname"`
+	Finished      bool                     `json:"finished"` // Include finished field for proper unmarshaling
+	JobsetEvals   []int                    `json:"jobsetevals"`
+	Priority      int                      `json:"priority"`
+	DrvPath       string                   `json:"drvpath"`
+	System        string                   `json:"system"`
+	BuildProducts map[string]interface{}   `json:"buildproducts"`
+	BuildOutputs  map[string]interface{}   `json:"buildoutputs"`
+	BuildMetrics  map[string]interface{}   `json:"buildmetrics"`
 }
 
 type Jobset struct {
@@ -190,16 +197,23 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 	// Mock search results based on query
 	if query == "hello" || query == "" {
 		result.Builds = append(result.Builds, Build{
-			ID:          1,
-			Project:     nixpkgsProject,
-			Jobset:      "trunk",
-			Job:         "hello",
-			Timestamp:   1692000000,
-			StartTime:   1692000000,
-			StopTime:    1692000000,
-			BuildStatus: 0,
-			NixName:     "hello-2.12.1",
-			Finished:    true,
+			ID:            1,
+			Project:       nixpkgsProject,
+			Jobset:        "trunk",
+			Job:           "hello",
+			Timestamp:     1692000000,
+			StartTime:     1692000000,
+			StopTime:      1692000000,
+			BuildStatus:   0,
+			NixName:       "hello-2.12.1",
+			Finished:      true,
+			JobsetEvals:   []int{1},
+			Priority:      100,
+			DrvPath:       "/nix/store/xyz-hello.drv",
+			System:        "x86_64-linux",
+			BuildProducts: map[string]interface{}{},
+			BuildOutputs:  map[string]interface{}{},
+			BuildMetrics:  map[string]interface{}{},
 		})
 	}
 
@@ -224,63 +238,91 @@ func handleBuild(w http.ResponseWriter, r *http.Request) {
 	switch buildID {
 	case "1":
 		build := Build{
-			ID:          1,
-			Project:     nixpkgsProject,
-			Jobset:      "trunk",
-			Job:         "hello",
-			Timestamp:   1692000000,
-			StartTime:   1692000000,
-			StopTime:    1692000000,
-			BuildStatus: 0,
-			NixName:     "hello-2.12.1",
-			Finished:    true,
+			ID:            1,
+			Project:       nixpkgsProject,
+			Jobset:        "trunk",
+			Job:           "hello",
+			Timestamp:     1692000000,
+			StartTime:     1692000000,
+			StopTime:      1692000000,
+			BuildStatus:   0,
+			NixName:       "hello-2.12.1",
+			Finished:      true,
+			JobsetEvals:   []int{1},
+			Priority:      100,
+			DrvPath:       "/nix/store/xyz-hello.drv",
+			System:        "x86_64-linux",
+			BuildProducts: map[string]interface{}{},
+			BuildOutputs:  map[string]interface{}{},
+			BuildMetrics:  map[string]interface{}{},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(build)
 	case "123456":
 		build := Build{
-			ID:          123456,
-			Project:     nixpkgsProject,
-			Jobset:      "trunk",
-			Job:         "hello",
-			Timestamp:   1692000000,
-			StartTime:   1692000000,
-			StopTime:    1692000000,
-			BuildStatus: 0,
-			NixName:     "hello-2.12.1",
-			Finished:    true,
+			ID:            123456,
+			Project:       nixpkgsProject,
+			Jobset:        "trunk",
+			Job:           "hello",
+			Timestamp:     1692000000,
+			StartTime:     1692000000,
+			StopTime:      1692000000,
+			BuildStatus:   0,
+			NixName:       "hello-2.12.1",
+			Finished:      true,
+			JobsetEvals:   []int{1},
+			Priority:      100,
+			DrvPath:       "/nix/store/xyz-hello.drv",
+			System:        "x86_64-linux",
+			BuildProducts: map[string]interface{}{},
+			BuildOutputs:  map[string]interface{}{},
+			BuildMetrics:  map[string]interface{}{},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(build)
 	case "123459":
 		// In-progress build
 		build := Build{
-			ID:          123459,
-			Project:     nixpkgsProject,
-			Jobset:      "trunk",
-			Job:         "gcc",
-			Timestamp:   1692000000,
-			StartTime:   1692000000,
-			StopTime:    0, // Not finished yet
-			BuildStatus: 0,
-			NixName:     "gcc-11.3.0",
-			Finished:    false, // In progress
+			ID:            123459,
+			Project:       nixpkgsProject,
+			Jobset:        "trunk",
+			Job:           "gcc",
+			Timestamp:     1692000000,
+			StartTime:     1692000000,
+			StopTime:      0, // Not finished yet
+			BuildStatus:   0,
+			NixName:       "gcc-11.3.0",
+			Finished:      false, // In progress
+			JobsetEvals:   []int{1},
+			Priority:      100,
+			DrvPath:       "/nix/store/xyz-gcc.drv",
+			System:        "x86_64-linux",
+			BuildProducts: map[string]interface{}{},
+			BuildOutputs:  map[string]interface{}{},
+			BuildMetrics:  map[string]interface{}{},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(build)
 	case "123460":
 		// Failed build
 		build := Build{
-			ID:          123460,
-			Project:     nixpkgsProject,
-			Jobset:      "trunk",
-			Job:         "broken-package",
-			Timestamp:   1692000000,
-			StartTime:   1692000000,
-			StopTime:    1692000000,
-			BuildStatus: 1, // Failed
-			NixName:     "broken-package-1.0",
-			Finished:    true,
+			ID:            123460,
+			Project:       nixpkgsProject,
+			Jobset:        "trunk",
+			Job:           "broken-package",
+			Timestamp:     1692000000,
+			StartTime:     1692000000,
+			StopTime:      1692000000,
+			BuildStatus:   1, // Failed
+			NixName:       "broken-package-1.0",
+			Finished:      true,
+			JobsetEvals:   []int{1},
+			Priority:      100,
+			DrvPath:       "/nix/store/xyz-broken.drv",
+			System:        "x86_64-linux",
+			BuildProducts: map[string]interface{}{},
+			BuildOutputs:  map[string]interface{}{},
+			BuildMetrics:  map[string]interface{}{},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(build)
